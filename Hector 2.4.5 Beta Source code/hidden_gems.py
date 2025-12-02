@@ -2,7 +2,14 @@
 # Detects overlooked players who deserve a second look
 
 from trade_value import parse_number, parse_salary, parse_years_left
-from player_utils import parse_star_rating, get_age, get_war
+from player_utils import parse_star_rating, get_age, get_war, is_star_scale
+
+
+# Thresholds for determining upside in late bloomers
+# For 20-80 scale, a gap of 5 points indicates significant upside
+UPSIDE_GAP_THRESHOLD_20_80 = 5
+# For star scale (1-5), a gap of 0.5 stars indicates significant upside
+UPSIDE_GAP_THRESHOLD_STAR = 0.5
 
 
 # Hidden Gem Category Definitions
@@ -142,14 +149,13 @@ def find_late_bloomers(batters, pitchers):
         ovr = parse_star_rating(batter.get("OVR", "0"))
         pot = parse_star_rating(batter.get("POT", "0"))
         
-        # Calculate remaining upside
-        if ovr > 10:  # 20-80 scale
-            upside_gap = pot - ovr
-            if upside_gap < 5:
+        # Calculate remaining upside using appropriate threshold for scale type
+        upside_gap = pot - ovr
+        if is_star_scale(ovr):
+            if upside_gap < UPSIDE_GAP_THRESHOLD_STAR:
                 continue
-        else:  # Star scale
-            upside_gap = pot - ovr
-            if upside_gap < 0.5:
+        else:  # 20-80 scale
+            if upside_gap < UPSIDE_GAP_THRESHOLD_20_80:
                 continue
         
         wrc_plus = parse_number(batter.get("wRC+", 0))
@@ -179,13 +185,13 @@ def find_late_bloomers(batters, pitchers):
         ovr = parse_star_rating(pitcher.get("OVR", "0"))
         pot = parse_star_rating(pitcher.get("POT", "0"))
         
-        if ovr > 10:  # 20-80 scale
-            upside_gap = pot - ovr
-            if upside_gap < 5:
+        # Calculate remaining upside using appropriate threshold for scale type
+        upside_gap = pot - ovr
+        if is_star_scale(ovr):
+            if upside_gap < UPSIDE_GAP_THRESHOLD_STAR:
                 continue
-        else:  # Star scale
-            upside_gap = pot - ovr
-            if upside_gap < 0.5:
+        else:  # 20-80 scale
+            if upside_gap < UPSIDE_GAP_THRESHOLD_20_80:
                 continue
         
         era_plus = parse_number(pitcher.get("ERA+", 0))

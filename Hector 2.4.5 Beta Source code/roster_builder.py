@@ -406,11 +406,9 @@ def calculate_trade_availability(player, player_type="batter"):
     ovr = parse_star_rating(player.get("OVR", "0"))
     pot = parse_star_rating(player.get("POT", "0"))
     
-    # Normalize OVR to 20-80 if needed
-    if ovr <= 10:
-        ovr = ovr * 16
-    if pot <= 10:
-        pot = pot * 16
+    # Normalize OVR and POT to 20-80 scale using shared utility
+    ovr = normalize_rating(ovr)
+    pot = normalize_rating(pot)
     
     # Higher OVR = less available
     if ovr >= 75:
