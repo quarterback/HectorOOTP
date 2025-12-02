@@ -5,7 +5,16 @@ import random
 
 from trade_value import parse_number, parse_salary, parse_years_left
 from archetypes import get_best_archetype, ARCHETYPES
-from player_utils import parse_star_rating, get_age, get_war, normalize_rating, STAR_TO_RATING_SCALE
+from player_utils import (
+    parse_star_rating, get_age, get_war, normalize_rating, STAR_TO_RATING_SCALE,
+    normalize_to_100, apply_scouting_uncertainty, get_games_played, get_innings_pitched
+)
+from philosophy_profiles import (
+    get_philosophy_profile, get_position_scarcity_score, is_premium_position,
+    PHILOSOPHY_PROFILES, PRIME_YEARS_MIN, PRIME_YEARS_MAX
+)
+from batter_stat_weights import stat_weights as batter_stat_weights, normalization as batter_normalization, MIN_PLATE_APPEARANCES
+from pitcher_stat_weights import stat_weights as pitcher_stat_weights, normalization as pitcher_normalization, MIN_INNINGS_PITCHED
 
 
 # Roster slot definitions
@@ -650,6 +659,555 @@ class RosterBuilder:
                 selected = random.choices(unique_candidates, weights=weights, k=1)[0]
                 self.add_to_bench(selected)
                 used_players.add(selected.get("Name", ""))
+    
+    # ========================================================================
+    # Philosophy-Based Roster Generation (v2)
+    # ========================================================================
+    
+    def auto_generate_roster_v2(self, philosophy="balanced", constraints=None,
+                                num_alternates=1, randomness=0.15):
+        """
+        Generate roster(s) using philosophy-weighted optimization.
+        
+        Args:
+            philosophy: Philosophy profile name or custom weights dict
+            constraints: Override constraints (budget, age limits, etc.)
+            num_alternates: Number of alternate rosters to generate
+            randomness: Noise factor (0-1) to introduce variety between runs
+        
+        Returns:
+            List of roster builds with scores and summaries
+        """
+        profile = get_philosophy_profile(philosophy)
+        
+        # Merge constraints with profile constraints
+        merged_constraints = profile.get("constraints", {}).copy()
+        if constraints:
+            merged_constraints.update(constraints)
+        
+        results = []
+        
+        for i in range(num_alternates):
+            # Clear roster for each alternate
+            self.clear_roster()
+            
+            # Track used players
+            used_players = set()
+            
+            # Score all players upfront
+            batter_scores = self._score_all_players(
+                self._all_batters, "batter", profile, merged_constraints, randomness
+            )
+            pitcher_scores = self._score_all_players(
+                self._all_pitchers, "pitcher", profile, merged_constraints, randomness
+            )
+            
+            # Fill lineup positions by selecting best available
+            for pos in LINEUP_SLOTS:
+                best = self._select_best_for_position(
+                    pos, batter_scores, used_players, merged_constraints
+                )
+                if best:
+                    self.add_to_lineup(best, pos)
+                    used_players.add(best.get("Name", ""))
+            
+            # Fill rotation
+            for _ in range(ROTATION_COUNT):
+                if len(self.rotation) >= ROTATION_COUNT:
+                    break
+                best = self._select_best_for_position(
+                    "SP", pitcher_scores, used_players, merged_constraints
+                )
+                if best:
+                    self.add_to_rotation(best)
+                    used_players.add(best.get("Name", ""))
+            
+            # Fill bullpen
+            for _ in range(BULLPEN_COUNT):
+                if len(self.bullpen) >= BULLPEN_COUNT:
+                    break
+                best = self._select_best_for_position(
+                    "RP", pitcher_scores, used_players, merged_constraints
+                )
+                if best:
+                    self.add_to_bullpen(best)
+                    used_players.add(best.get("Name", ""))
+            
+            # Fill bench
+            for _ in range(BENCH_COUNT):
+                if len(self.bench) >= BENCH_COUNT:
+                    break
+                best = self._select_best_for_bench(
+                    batter_scores, used_players, merged_constraints
+                )
+                if best:
+                    self.add_to_bench(best)
+                    used_players.add(best.get("Name", ""))
+            
+            # Get roster summary and calculate overall score
+            summary = self.get_roster_summary()
+            roster_score = self._calculate_roster_score(profile)
+            
+            results.append({
+                "roster": self.export_roster(),
+                "summary": summary,
+                "score": roster_score,
+                "philosophy": profile["name"],
+                "constraints_applied": merged_constraints,
+            })
+        
+        # Sort by score descending
+        results.sort(key=lambda x: x["score"], reverse=True)
+        
+        # If only one roster requested, import it back
+        if num_alternates == 1 and results:
+            self.import_roster(results[0]["roster"])
+        
+        return results
+    
+    def _score_all_players(self, players, player_type, profile, constraints, randomness):
+        """
+        Score all players using composite scoring.
+        
+        Returns dict of player_name -> {player, score, component_scores}
+        """
+        scores = {}
+        
+        for player in players:
+            # Apply hard constraints first
+            if not self._meets_constraints(player, player_type, constraints):
+                continue
+            
+            # Calculate composite score
+            composite, components = self.calculate_composite_score(
+                player, player_type, profile
+            )
+            
+            # Apply randomness jitter
+            if randomness > 0:
+                jitter = random.gauss(0, randomness * 10)  # Scaled to score range
+                composite = max(0, min(100, composite + jitter))
+            
+            name = player.get("Name", "")
+            scores[name] = {
+                "player": player,
+                "score": composite,
+                "components": components,
+            }
+        
+        return scores
+    
+    def _meets_constraints(self, player, player_type, constraints):
+        """Check if a player meets the hard constraints."""
+        if not constraints:
+            return True
+        
+        age = get_age(player)
+        salary = parse_salary(player.get("SLR", 0))
+        yl_data = parse_years_left(player.get("YL", ""))
+        status = yl_data.get("status", "unknown")
+        
+        # Max age constraint
+        if "max_age" in constraints:
+            if age > constraints["max_age"]:
+                return False
+        
+        # Max salary per player constraint
+        if "max_salary_per_player" in constraints:
+            if salary > constraints["max_salary_per_player"]:
+                return False
+        
+        # Prefer pre-arb constraint (soft, but implemented as harder filter)
+        if constraints.get("prefer_pre_arb"):
+            # Don't exclude, but this is handled in scoring with preference
+            pass
+        
+        return True
+    
+    def _select_best_for_position(self, position, player_scores, used_players, constraints):
+        """
+        Select the best available player for a position.
+        
+        Args:
+            position: Position to fill (C, 1B, SP, RP, etc.)
+            player_scores: Dict of scored players
+            used_players: Set of already used player names
+            constraints: Constraint dict
+        
+        Returns:
+            Best available player dict or None
+        """
+        candidates = []
+        
+        for name, data in player_scores.items():
+            if name in used_players:
+                continue
+            
+            player = data["player"]
+            player_pos = player.get("POS", "")
+            
+            # Match position
+            if position == "RP":
+                if player_pos not in ["RP", "CL"]:
+                    continue
+            elif position == "DH":
+                # DH can be any batter
+                pass
+            else:
+                if player_pos != position:
+                    continue
+            
+            candidates.append((data["score"], player))
+        
+        if not candidates:
+            return None
+        
+        # Sort by score descending and return the best
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+    
+    def _select_best_for_bench(self, player_scores, used_players, constraints):
+        """
+        Select the best available player for bench.
+        Prefers utility players who can play multiple positions.
+        """
+        candidates = []
+        
+        for name, data in player_scores.items():
+            if name in used_players:
+                continue
+            
+            player = data["player"]
+            player_pos = player.get("POS", "")
+            
+            # Skip DH for bench
+            if player_pos == "DH":
+                continue
+            
+            # Valid bench positions
+            if player_pos in LINEUP_SLOTS or player_pos in ["LF", "CF", "RF"]:
+                candidates.append((data["score"], player))
+        
+        if not candidates:
+            return None
+        
+        # Sort by score descending and return the best
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+    
+    def _calculate_roster_score(self, profile):
+        """Calculate overall roster score based on philosophy weights."""
+        all_players = self.get_all_roster_players()
+        
+        if not all_players:
+            return 0
+        
+        total_score = 0
+        for entry in all_players:
+            player = entry["player"]
+            slot_type = entry["type"]
+            player_type = "pitcher" if slot_type in ["rotation", "bullpen"] else "batter"
+            
+            score, _ = self.calculate_composite_score(player, player_type, profile)
+            total_score += score
+        
+        # Return average score
+        return round(total_score / len(all_players), 1)
+    
+    def calculate_composite_score(self, player, player_type, profile):
+        """
+        Calculate composite score for a player using philosophy weights.
+        
+        Args:
+            player: Player dict
+            player_type: "batter" or "pitcher"
+            profile: Philosophy profile dict with weights
+        
+        Returns:
+            Tuple of (composite_score, component_scores_dict)
+        """
+        weights = profile.get("weights", {})
+        
+        # Calculate individual component scores
+        stats_score = self._score_current_stats(player, player_type)
+        ratings_score = self._score_current_ratings(player)
+        potential_score = self._score_potential(player)
+        value_score = self._score_value_efficiency(player, player_type)
+        age_score = self._score_age_curve(player, profile)
+        position = player.get("POS", "")
+        scarcity_score = self._score_positional_scarcity(player, position, player_type)
+        
+        components = {
+            "current_stats": stats_score,
+            "current_ratings": ratings_score,
+            "potential": potential_score,
+            "value_efficiency": value_score,
+            "age_curve": age_score,
+            "positional_scarcity": scarcity_score,
+        }
+        
+        # Calculate weighted composite
+        composite = 0
+        for key, component_score in components.items():
+            weight = weights.get(key, 0)
+            composite += component_score * weight
+        
+        return round(composite, 2), components
+    
+    def _score_current_stats(self, player, player_type):
+        """
+        Score player based on current stats.
+        Uses wRC+, WAR, OPS+ for batters; ERA+, WAR for pitchers.
+        Falls back to ratings for limited sample size.
+        
+        Returns score 0-100.
+        """
+        if player_type == "batter":
+            games = get_games_played(player, "batter")
+            
+            # Check sample size
+            if games < MIN_PLATE_APPEARANCES:
+                # Fall back to ratings-based scoring
+                return self._score_current_ratings(player)
+            
+            # Calculate stats-based score
+            score = 0
+            total_weight = 0
+            
+            # wRC+ (30% weight from batter_stat_weights)
+            wrc_plus = parse_number(player.get("wRC+", 100))
+            wrc_norm = batter_normalization.get("wRC+", {})
+            wrc_score = normalize_to_100(
+                wrc_plus, 
+                wrc_norm.get("min", 50), 
+                wrc_norm.get("max", 180)
+            )
+            weight = batter_stat_weights.get("wRC+", {}).get("weight", 0.30)
+            score += wrc_score * weight
+            total_weight += weight
+            
+            # WAR (30% weight)
+            war = get_war(player, "batter")
+            war_norm = batter_normalization.get("WAR (Batter)", {})
+            war_score = normalize_to_100(
+                war,
+                war_norm.get("min", -2.0),
+                war_norm.get("max", 8.0)
+            )
+            weight = batter_stat_weights.get("WAR (Batter)", {}).get("weight", 0.30)
+            score += war_score * weight
+            total_weight += weight
+            
+            # OPS+ (15% weight)
+            ops_plus = parse_number(player.get("OPS+", 100))
+            ops_norm = batter_normalization.get("OPS+", {})
+            ops_score = normalize_to_100(
+                ops_plus,
+                ops_norm.get("min", 50),
+                ops_norm.get("max", 180)
+            )
+            weight = batter_stat_weights.get("OPS+", {}).get("weight", 0.15)
+            score += ops_score * weight
+            total_weight += weight
+            
+            # Normalize by total weight to get 0-100 scale
+            if total_weight > 0:
+                score = score / total_weight
+            
+            return min(100, max(0, score))
+        
+        else:  # pitcher
+            ip = get_innings_pitched(player)
+            
+            # Check sample size
+            if ip < MIN_INNINGS_PITCHED:
+                return self._score_current_ratings(player)
+            
+            score = 0
+            total_weight = 0
+            
+            # ERA+ (30% weight)
+            era_plus = parse_number(player.get("ERA+", 100))
+            era_norm = pitcher_normalization.get("ERA+", {})
+            era_score = normalize_to_100(
+                era_plus,
+                era_norm.get("min", 50),
+                era_norm.get("max", 200)
+            )
+            weight = pitcher_stat_weights.get("ERA+", {}).get("weight", 0.30)
+            score += era_score * weight
+            total_weight += weight
+            
+            # WAR (30% weight)
+            war = get_war(player, "pitcher")
+            war_norm = pitcher_normalization.get("WAR (Pitcher)", {})
+            war_score = normalize_to_100(
+                war,
+                war_norm.get("min", -2.0),
+                war_norm.get("max", 8.0)
+            )
+            weight = pitcher_stat_weights.get("WAR (Pitcher)", {}).get("weight", 0.30)
+            score += war_score * weight
+            total_weight += weight
+            
+            if total_weight > 0:
+                score = score / total_weight
+            
+            return min(100, max(0, score))
+    
+    def _score_current_ratings(self, player):
+        """
+        Score player based on current OVR rating.
+        Normalizes to 0-100 scale.
+        
+        Returns score 0-100.
+        """
+        ovr = parse_star_rating(player.get("OVR", "0"))
+        ovr_normalized = normalize_rating(ovr)
+        
+        # Map 20-80 scale to 0-100
+        # 20 = 0, 80 = 100
+        score = normalize_to_100(ovr_normalized, 20, 80)
+        return min(100, max(0, score))
+    
+    def _score_potential(self, player):
+        """
+        Score player based on POT rating and upside gap.
+        Blends POT with (POT - OVR) gap.
+        
+        Returns score 0-100.
+        """
+        pot = parse_star_rating(player.get("POT", "0"))
+        ovr = parse_star_rating(player.get("OVR", "0"))
+        
+        pot_normalized = normalize_rating(pot)
+        ovr_normalized = normalize_rating(ovr)
+        
+        # POT component (70% of potential score)
+        pot_score = normalize_to_100(pot_normalized, 20, 80)
+        
+        # Upside gap component (30% of potential score)
+        # Gap range: -20 to +30 (negative means OVR > POT, rare)
+        upside_gap = pot_normalized - ovr_normalized
+        gap_score = normalize_to_100(upside_gap, -20, 30)
+        
+        # Blend
+        score = (pot_score * 0.7) + (gap_score * 0.3)
+        return min(100, max(0, score))
+    
+    def _score_value_efficiency(self, player, player_type):
+        """
+        Score player based on WAR/$ ratio.
+        Higher WAR per dollar = better value.
+        
+        Returns score 0-100.
+        """
+        war = get_war(player, player_type)
+        salary = parse_salary(player.get("SLR", 0))
+        
+        # Handle edge cases
+        if salary <= 0:
+            # Pre-arb or minimum salary - excellent value if positive WAR
+            if war >= 2.0:
+                return 100
+            elif war >= 1.0:
+                return 85
+            elif war >= 0:
+                return 70
+            else:
+                return 30
+        
+        # Calculate WAR per million dollars
+        war_per_million = war / salary
+        
+        # Normalize: 0 $/WAR = 0, 2+ WAR/$ = 100
+        # Typical range: -0.5 to 2.0 WAR/$
+        score = normalize_to_100(war_per_million, -0.5, 2.0)
+        
+        # Bonus for pre-arb/arb status
+        yl_data = parse_years_left(player.get("YL", ""))
+        status = yl_data.get("status", "unknown")
+        
+        if status == "pre_arb":
+            score = min(100, score + 10)
+        elif status == "arbitration":
+            score = min(100, score + 5)
+        
+        return min(100, max(0, score))
+    
+    def _score_age_curve(self, player, profile):
+        """
+        Score player based on age relative to philosophy preferences.
+        
+        Returns score 0-100.
+        """
+        age = get_age(player)
+        
+        if age <= 0:
+            return 50  # Unknown age, neutral score
+        
+        age_prefs = profile.get("age_preferences", {})
+        ideal_min = age_prefs.get("ideal_min", PRIME_YEARS_MIN)
+        ideal_max = age_prefs.get("ideal_max", PRIME_YEARS_MAX)
+        acceptable_min = age_prefs.get("acceptable_min", 22)
+        acceptable_max = age_prefs.get("acceptable_max", 33)
+        
+        # Ideal age range = 100
+        if ideal_min <= age <= ideal_max:
+            return 100
+        
+        # Acceptable range outside ideal = scaled score
+        if acceptable_min <= age < ideal_min:
+            # Between acceptable and ideal min
+            distance = ideal_min - age
+            range_size = ideal_min - acceptable_min
+            if range_size > 0:
+                return 100 - (distance / range_size) * 30  # 70-100
+            return 85
+        
+        if ideal_max < age <= acceptable_max:
+            # Between ideal max and acceptable max
+            distance = age - ideal_max
+            range_size = acceptable_max - ideal_max
+            if range_size > 0:
+                return 100 - (distance / range_size) * 30  # 70-100
+            return 85
+        
+        # Outside acceptable range = lower scores
+        if age < acceptable_min:
+            # Too young
+            distance = acceptable_min - age
+            return max(30, 70 - distance * 10)
+        
+        if age > acceptable_max:
+            # Too old
+            distance = age - acceptable_max
+            return max(10, 70 - distance * 15)
+        
+        return 50
+    
+    def _score_positional_scarcity(self, player, position, player_type):
+        """
+        Score player based on positional scarcity.
+        Premium positions (C, SS, CF for batters; SP for pitchers) get bonus.
+        
+        Returns score 0-100.
+        """
+        # Base score of 50
+        base_score = 50
+        
+        # Get scarcity multiplier from philosophy_profiles
+        scarcity_mult = get_position_scarcity_score(position)
+        
+        # Scale: 0.85 -> 35, 1.0 -> 50, 1.15 -> 65
+        # Formula: base + (mult - 1.0) * 100
+        score = base_score + (scarcity_mult - 1.0) * 100
+        
+        # Additional bonus for premium positions
+        if is_premium_position(position, player_type):
+            score += 15
+        
+        return min(100, max(0, score))
 
 
 def calculate_trade_availability(player, player_type="batter"):

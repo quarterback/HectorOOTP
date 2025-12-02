@@ -98,3 +98,100 @@ def is_star_scale(val):
     Values <= RATING_SCALE_THRESHOLD are considered star scale.
     """
     return val <= RATING_SCALE_THRESHOLD
+
+
+def normalize_to_100(value, min_val, max_val):
+    """
+    Normalize any value to 0-100 scale.
+    
+    Args:
+        value: The value to normalize
+        min_val: Minimum expected value
+        max_val: Maximum expected value
+    
+    Returns:
+        Value scaled to 0-100 range, clamped to [0, 100]
+    """
+    if max_val <= min_val:
+        return 0.0
+    
+    normalized = ((value - min_val) / (max_val - min_val)) * 100
+    return max(0.0, min(100.0, normalized))
+
+
+def apply_scouting_uncertainty(player, uncertainty_level=0.1):
+    """
+    Apply random noise to potential ratings to simulate scouting uncertainty.
+    
+    High-potential prospects have more variance in their true ability.
+    This function returns a modified POT value with noise applied.
+    
+    Args:
+        player: Player dict
+        uncertainty_level: Base uncertainty factor (0-1). Default 0.1 = 10% variance.
+                          Higher values increase variance.
+    
+    Returns:
+        Modified potential value with noise applied
+    """
+    import random
+    
+    pot = parse_star_rating(player.get("POT", "0"))
+    ovr = parse_star_rating(player.get("OVR", "0"))
+    age = get_age(player)
+    
+    if pot <= 0:
+        return pot
+    
+    # Younger players and those with larger upside gaps have more uncertainty
+    age_factor = max(0.5, (30 - age) / 10) if age < 30 else 0.3
+    upside_gap = pot - ovr
+    gap_factor = 1.0 + (upside_gap / 20) if upside_gap > 0 else 1.0
+    
+    # Calculate total uncertainty
+    total_uncertainty = uncertainty_level * age_factor * gap_factor
+    
+    # Apply gaussian noise
+    noise = random.gauss(0, total_uncertainty)
+    
+    # Scale noise to rating scale
+    if is_star_scale(pot):
+        noise_scaled = noise * 0.5  # 0.5 star variance at base uncertainty
+    else:
+        noise_scaled = noise * 10  # 10 point variance at base uncertainty on 20-80 scale
+    
+    return max(0, pot + noise_scaled)
+
+
+def get_games_played(player, player_type="batter"):
+    """
+    Get games played for sample size determination.
+    
+    Args:
+        player: Player dict
+        player_type: "batter" or "pitcher"
+    
+    Returns:
+        Games played as int, 0 if not available
+    """
+    if player_type == "pitcher":
+        # For pitchers, check G (games) or GS (games started)
+        g = parse_number(player.get("G", 0))
+        if g > 0:
+            return int(g)
+        return int(parse_number(player.get("GS", 0)))
+    else:
+        return int(parse_number(player.get("G", 0)))
+
+
+def get_innings_pitched(player):
+    """
+    Get innings pitched for pitcher sample size determination.
+    
+    Args:
+        player: Player dict
+    
+    Returns:
+        IP as float, 0.0 if not available
+    """
+    return parse_number(player.get("IP", 0))
