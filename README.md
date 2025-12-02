@@ -200,10 +200,10 @@ The Contract Value tab helps evaluate whether players provide good value relativ
 
 | Category | Icon | Criteria |
 |----------|------|----------|
-| **Surplus** | 💰 | WAR ≥ 2.0 AND low salary or short contract |
+| **Surplus** | 💰 | WAR ≥ 2.0 AND (salary ≤ $5M OR YL ≤ 2) |
 | **Fair Value** | ⚠️ | $/WAR within normal range |
-| **Albatross** | 🚨 | High salary, WAR < 1.0, YL ≥ 2 |
-| **Arb Target** | 🎯 | Age 25-27, good stats, YL ≤ 3 |
+| **Albatross** | 🚨 | Salary ≥ $10M, WAR < 1.0, YL ≥ 2 |
+| **Arb Target** | 🎯 | Age 25-27, WAR ≥ 1.5, YL ≤ 3 |
 
 **Features:**
 - Filter by player type (Batters/Pitchers)
