@@ -15,6 +15,8 @@ from .teams_tab import add_teams_tab
 from .trade_tab import add_trade_tab
 from .contract_tab import add_contract_tab
 from .trade_finder_tab import add_trade_finder_tab
+from .contract_value_tab import add_contract_value_tab
+from .platoon_finder_tab import add_platoon_finder_tab
 from .widgets import (
     create_title_label, create_summary_widgets, create_control_frame, update_summary_widgets,
     validate_fields, detect_wrong_import, show_loading_bar, set_app_icon
@@ -261,6 +263,8 @@ def build_gui():
             trade_tab = add_trade_tab(notebook, font)
             contract_tab = add_contract_tab(notebook, font)
             trade_finder_tab = add_trade_finder_tab(notebook, font)
+            contract_value_tab = add_contract_value_tab(notebook, font)
+            platoon_finder_tab = add_platoon_finder_tab(notebook, font)
             root._gui_vars = {
                 "summary_left_var": summary_left_var,
                 "summary_right_var": summary_right_var,
@@ -270,6 +274,8 @@ def build_gui():
                 "trade_tab": trade_tab,
                 "contract_tab": contract_tab,
                 "trade_finder_tab": trade_finder_tab,
+                "contract_value_tab": contract_value_tab,
+                "platoon_finder_tab": platoon_finder_tab,
                 "font": font,
                 "notebook": notebook
             }
@@ -295,6 +301,8 @@ def build_gui():
                             trade_tab.refresh(result_reload["pitchers"], result_reload["batters"])
                             contract_tab.refresh(result_reload["pitchers"], result_reload["batters"])
                             trade_finder_tab.refresh(result_reload["pitchers"], result_reload["batters"])
+                            contract_value_tab.refresh(result_reload["pitchers"], result_reload["batters"])
+                            platoon_finder_tab.refresh(result_reload["pitchers"], result_reload["batters"])
                             update_summary_widgets(DATA, summary_left_var, summary_right_var)
                 check_reload()
             reload_btn.config(command=refresh_all_tabs)
@@ -305,6 +313,8 @@ def build_gui():
             trade_tab.refresh(result["pitchers"], result["batters"])
             contract_tab.refresh(result["pitchers"], result["batters"])
             trade_finder_tab.refresh(result["pitchers"], result["batters"])
+            contract_value_tab.refresh(result["pitchers"], result["batters"])
+            platoon_finder_tab.refresh(result["pitchers"], result["batters"])
             update_summary_widgets(DATA, summary_left_var, summary_right_var)
 
     # Initial threaded load (while showing the loader)

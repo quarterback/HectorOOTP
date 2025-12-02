@@ -12,6 +12,9 @@ This is a fork of [zab1996/HectorOOTP](https://github.com/zab1996/HectorOOTP) th
 
 - **Stats-Based Evaluation**: Evaluate players based on actual performance stats (wRC+, WAR, ERA+, FIP, etc.) instead of just ratings
 - **Trade Analysis Tools**: Find trade targets with the Trade Finder tab - identify expiring veterans to sell and high-upside prospects to buy
+- **Contract Value Analysis**: Evaluate contract efficiency with $/WAR calculations, surplus value, and contract categories (Surplus, Albatross, Arb Target)
+- **Platoon Finder**: Identify platoon opportunities by matching L/R batters at same positions, find DH candidates, and highlight platoon-proof switch hitters
+- **Trade Value Calculator**: Composite 1-100 trade value score for every player based on current production, future value, contract value, and position scarcity
 - **Mac Compatible**: Can run from source with Python on macOS (see [Running on Mac](#running-on-mac))
 
 ---
@@ -24,6 +27,9 @@ This is a fork of [zab1996/HectorOOTP](https://github.com/zab1996/HectorOOTP) th
 - [Flexible Weighting System](#flexible-weighting-system)
 - [Stats-Based Scoring](#stats-based-scoring)
 - [Trade Finder Tab](#trade-finder-tab)
+- [Contract Value Tab](#contract-value-tab)
+- [Platoon Finder Tab](#platoon-finder-tab)
+- [Trade Value Calculator](#trade-value-calculator)
 - [Age Definitions](#age-definitions)
 - [Stat Columns Used](#stat-columns-used)
 - [Hector Data Export Instructions](#hector-data-export-instructions)
@@ -169,6 +175,121 @@ Find young players with significant development upside:
 - Position filters for both panels
 - Adjustable thresholds for WAR and potential gap
 - Double-click to open player's Stats+ page
+
+---
+
+## Contract Value Tab
+[⬆️ Back to Top](#top)
+
+The Contract Value tab helps evaluate whether players provide good value relative to their salary. Useful for long-term roster building and identifying value opportunities.
+
+### Metrics Calculated
+
+**$/WAR (Dollars per WAR)**
+- Formula: `Salary / WAR`
+- Lower is better
+- Shows "∞" for players with 0 or negative WAR
+
+**Surplus Value**
+- Formula: `(WAR × $8M) - Salary`
+- Positive = surplus value (good deal)
+- Negative = overpay
+- Uses league average of $8M per WAR
+
+### Contract Categories
+
+| Category | Icon | Criteria |
+|----------|------|----------|
+| **Surplus** | 💰 | WAR ≥ 2.0 AND (salary ≤ $5M OR YL ≤ 2) |
+| **Fair Value** | ⚠️ | $/WAR within normal range |
+| **Albatross** | 🚨 | Salary ≥ $10M, WAR < 1.0, YL ≥ 2 |
+| **Arb Target** | 🎯 | Age 25-27, WAR ≥ 1.5, YL ≤ 3 |
+
+**Features:**
+- Filter by player type (Batters/Pitchers)
+- Filter by position
+- Filter by contract category
+- Minimum WAR threshold
+- Sortable by all columns
+- Color-coded rows by category
+
+---
+
+## Platoon Finder Tab
+[⬆️ Back to Top](#top)
+
+The Platoon Finder tab helps identify platoon opportunities and specialized roster construction options.
+
+### ⚾ Platoon Pairs
+Find pairs of L-bat and R-bat players at the same position who could form productive platoons:
+- Matches players by position with opposite batting hands
+- Configurable OVR range (default 30-60)
+- Filter by position or team
+- Green highlight for same-team platoons
+
+### 🎯 DH Candidates
+Identify players who are better suited for DH:
+- Good batting ratings (CON, POW, EYE ≥ 50)
+- Poor defensive ratings (< 40)
+- Shows batting and defensive averages
+- Explains why each player is a DH candidate
+
+### 🔄 Switch Hitters (Platoon-Proof)
+List all switch hitters in the database:
+- Switch hitters have no platoon disadvantage
+- Shows OVR, POT, and key batting ratings
+- Value assessment (High Value, Solid Value, Depth Piece)
+
+---
+
+## Trade Value Calculator
+[⬆️ Back to Top](#top)
+
+The Trade Value column appears in both Batters and Pitchers tabs, providing a composite score (1-100) for quick comparison.
+
+### Trade Value Components
+
+| Component | Weight | Description |
+|-----------|--------|-------------|
+| **Current Production** | 40% | Based on WAR and calculated scores |
+| **Future Value** | 30% | POT rating × age multiplier |
+| **Contract Value** | 20% | Years of control + salary efficiency |
+| **Position Scarcity** | 10% | Premium for scarce positions |
+
+### Age Multipliers for Future Value
+
+| Age | Multiplier |
+|-----|------------|
+| ≤ 23 | 1.30x |
+| 24-25 | 1.15x |
+| 26-27 | 1.00x |
+| 28-29 | 0.85x |
+| 30-32 | 0.60x |
+| 33+ | 0.40x |
+
+### Position Scarcity Multipliers
+
+| Position | Multiplier |
+|----------|------------|
+| C | 1.15 |
+| SS | 1.12 |
+| CF | 1.10 |
+| SP | 1.08 |
+| 2B, 3B | 1.05 |
+| RP, LF, RF | 0.95 |
+| 1B | 0.90 |
+| DH | 0.85 |
+
+### Trade Value Tiers
+
+| Tier | Score | Icon | Description |
+|------|-------|------|-------------|
+| Elite | 80-100 | 💎 | Franchise cornerstones, untouchable |
+| Star | 65-79 | ⭐ | High-end starters, cost a lot to acquire |
+| Solid | 50-64 | ✅ | Quality regulars, good trade chips |
+| Average | 35-49 | 📊 | Role players, depth pieces |
+| Below Average | 20-34 | 📉 | Marginal value, throw-ins |
+| Minimal | 1-19 | ❌ | Replacement level or worse |
 
 ---
 

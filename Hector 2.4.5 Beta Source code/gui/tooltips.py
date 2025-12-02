@@ -137,6 +137,16 @@ PITCHER_COL_TOOLTIPS = {
         "+ all current non-potential weighted factors (stamina, #pitches, etc).\n"
         "Represents true present skill."
     ),
+    "Trade Value": (
+        "Trade Value (1-100):\n"
+        "Composite trade value score based on:\n"
+        "- Current Production (40%): WAR + calculated scores\n"
+        "- Future Value (30%): POT × age multiplier\n"
+        "- Contract Value (20%): years of control + salary\n"
+        "- Position Scarcity (10%): premium for SP over RP\n\n"
+        "Tiers: 💎 Elite (80+), ⭐ Star (65-79), ✅ Solid (50-64),\n"
+        "📊 Average (35-49), 📉 Below Avg (20-34), ❌ Minimal (1-19)"
+    ),
 }
 
 BATTER_COL_TOOLTIPS = {
@@ -165,6 +175,16 @@ BATTER_COL_TOOLTIPS = {
         "Sum of offense, offense potential, defense, baserunning,\n"
         "injury risk, and scouting accuracy, all with weights from batter_weights.py.\n"
         "Represents full combined value."
+    ),
+    "Trade Value": (
+        "Trade Value (1-100):\n"
+        "Composite trade value score based on:\n"
+        "- Current Production (40%): WAR + calculated scores\n"
+        "- Future Value (30%): POT × age multiplier\n"
+        "- Contract Value (20%): years of control + salary\n"
+        "- Position Scarcity (10%): premium for C, SS, CF\n\n"
+        "Tiers: 💎 Elite (80+), ⭐ Star (65-79), ✅ Solid (50-64),\n"
+        "📊 Average (35-49), 📉 Below Avg (20-34), ❌ Minimal (1-19)"
     ),
 }
 
