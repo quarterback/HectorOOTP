@@ -6,10 +6,26 @@ Hector is a powerful and fully customizable desktop analytics tool for Out of th
 
 ---
 
+## Fork Overview
+
+This is a fork of [zab1996/HectorOOTP](https://github.com/zab1996/HectorOOTP) that adds several new features:
+
+- **Stats-Based Evaluation**: Evaluate players based on actual performance stats (wRC+, WAR, ERA+, FIP, etc.) instead of just ratings
+- **Trade Analysis Tools**: Find trade targets with the Trade Finder tab - identify expiring veterans to sell and high-upside prospects to buy
+- **Mac Compatible**: Can run from source with Python on macOS (see [Running on Mac](#running-on-mac))
+
+---
+
 ## Table of Contents
 
+- [Fork Overview](#fork-overview)
 - [Downloading the Latest Version](#downloading-the-latest-version)
+- [Running on Mac](#running-on-mac)
 - [Flexible Weighting System](#flexible-weighting-system)
+- [Stats-Based Scoring](#stats-based-scoring)
+- [Trade Finder Tab](#trade-finder-tab)
+- [Age Definitions](#age-definitions)
+- [Stat Columns Used](#stat-columns-used)
 - [Hector Data Export Instructions](#hector-data-export-instructions)
 - [Features Overview](#features-overview)
   - [Core Functionality](#core-functionality)
@@ -47,6 +63,35 @@ Download the newest build of Hector from the **Releases** page:
 
 ---
 
+## Running on Mac
+[⬆️ Back to Top](#top)
+
+Hector can run from source on macOS:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/quarterback/HectorOOTP.git
+   ```
+
+2. Navigate to the source code directory:
+   ```bash
+   cd "HectorOOTP/Hector 2.4.5 Beta Source code"
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip3 install pandas beautifulsoup4
+   ```
+
+4. Run Hector:
+   ```bash
+   python3 main.py
+   ```
+
+> **Note:** `tkinter` comes built-in with Python on macOS.
+
+---
+
 ## Flexible Weighting System
 [⬆️ Back to Top](#top)
 
@@ -57,10 +102,140 @@ Download the newest build of Hector from the **Releases** page:
 
 How to adjust the weights:
 
-1. Open `pitcher_weights.py` or `batter_weights.py` in a text editor (e.g., Notepad++ or VS Code).
+1. Open `pitcher_weights.py` or `batter_weights.py` in a text editor (e.g., Notepad++, VS Code, or TextEdit on Mac).
 2. Modify values in the `section_weights` dictionary — higher = more influence on the score.
-3. Save your changes in the program folder alongside the `.exe`.
+3. Save your changes in the program folder alongside the `.exe` (or in the source directory on Mac).
 4. In Hector, click the **Reload Data** button to apply changes immediately.
+
+---
+
+## Stats-Based Scoring
+[⬆️ Back to Top](#top)
+
+Hector includes a stats-based scoring system that evaluates players on actual performance rather than ratings.
+
+**How to Enable:**
+- Check the "Use Stats-Based Scoring" toggle in the Pitchers or Batters tab
+
+**How It Works:**
+- Calculates player value using real performance stats instead of scout ratings
+- Provides a more accurate picture of current production
+- Especially useful for evaluating MLB-level players with established track records
+
+**Batter Stats Used:**
+- **wRC+** (Weighted Runs Created Plus) - Primary offensive value metric (30% weight)
+- **WAR** (Wins Above Replacement) - Overall value (30% weight)
+- **OPS+** (OPS Plus) - Park-adjusted OPS (15% weight)
+- **G** (Games) - Sample size indicator (5% weight)
+
+**Pitcher Stats Used:**
+- **WAR** (Wins Above Replacement) - Overall value (30% weight)
+- **ERA+** (ERA Plus) - Park-adjusted ERA, higher is better (30% weight)
+- **rWAR** (Replacement-level WAR) - (15% weight)
+- **HLD** (Holds) - Reliever value indicator (5% weight, RP/CL only)
+- **IP** (Innings Pitched) - Workload indicator (5% weight)
+
+**Automatic Fallback to Ratings:**
+Players with limited sample sizes automatically use ratings-only scoring:
+- **Batters**: Less than 50 games → uses ratings only
+- **Pitchers**: Less than 20 IP → uses ratings only
+
+**Configuring Weights:**
+- Edit `batter_stat_weights.py` for batter stat weights and thresholds
+- Edit `pitcher_stat_weights.py` for pitcher stat weights and thresholds
+
+---
+
+## Trade Finder Tab
+[⬆️ Back to Top](#top)
+
+The Trade Finder tab helps identify trade targets and assets. It displays two panels:
+
+### 📤 Expiring Veterans (Sell High)
+Find productive veterans on expiring contracts to trade for prospects:
+- **Age**: 27 or older
+- **Years Left (YL)**: 1 year or less remaining
+- **Production**: Currently producing (configurable minimum WAR)
+- Displays wRC+ for batters, ERA+ for pitchers
+
+### 📥 High-Upside Prospects (Buy Low)
+Find young players with significant development upside:
+- **Age**: 25 or under
+- **Potential Gap**: POT - OVR ≥ 15 (configurable)
+- Shows OVR, POT, and the gap between them
+
+**Features:**
+- Sortable tables by clicking column headers
+- Position filters for both panels
+- Adjustable thresholds for WAR and potential gap
+- Double-click to open player's Stats+ page
+
+---
+
+## Age Definitions
+[⬆️ Back to Top](#top)
+
+Hector uses the following age categories for trade analysis:
+
+| Category | Age Range | Description |
+|----------|-----------|-------------|
+| **Prospect** | 25 or under | Young players still developing, valued for future potential |
+| **Tweener** | 26 | Players in transition, evaluate case-by-case |
+| **Veteran** | 27 or older | Established players, valued primarily for current production |
+
+---
+
+## Stat Columns Used
+[⬆️ Back to Top](#top)
+
+Hector can ingest the following statistics from your OOTP HTML export:
+
+### Batting Stats
+| Stat | Description |
+|------|-------------|
+| G | Games played |
+| HR | Home runs |
+| RBI | Runs batted in |
+| BB% | Walk percentage |
+| SO% | Strikeout percentage |
+| AVG | Batting average |
+| OBP | On-base percentage |
+| SLG | Slugging percentage |
+| ISO | Isolated power |
+| wOBA | Weighted on-base average |
+| OPS | On-base plus slugging |
+| OPS+ | Park-adjusted OPS (100 = league average) |
+| BABIP | Batting average on balls in play |
+| wRC+ | Weighted runs created plus (100 = league average) |
+| WAR | Wins above replacement (batter) |
+| SB | Stolen bases |
+| UBR | Ultimate base running |
+
+### Pitching Stats
+| Stat | Description |
+|------|-------------|
+| W | Wins |
+| SV | Saves |
+| HLD | Holds |
+| SD | Shutdowns |
+| IP | Innings pitched |
+| HR/9 | Home runs per 9 innings |
+| BB/9 | Walks per 9 innings |
+| K/9 | Strikeouts per 9 innings |
+| pLi | Average leverage index |
+| ERA+ | Park-adjusted ERA (100 = league average, higher is better) |
+| FIP | Fielding independent pitching |
+| FIP- | FIP minus (100 = league average, lower is better) |
+| WAR | Wins above replacement (pitcher) |
+| rWAR | Reference WAR |
+| SIERA | Skill-interactive ERA |
+
+### Contract/Other
+| Stat | Description |
+|------|-------------|
+| YL | Years left on contract |
+| SLR | Salary |
+| SctAcc | Scout accuracy |
 
 ---
 
