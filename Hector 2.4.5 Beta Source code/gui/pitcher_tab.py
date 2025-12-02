@@ -14,6 +14,7 @@ from .tooltips import (
     attach_treeview_row_tooltips, HIGHLIGHT_EXPLANATIONS, add_button_tooltip
 )
 from pitchers import calculate_score
+from trade_value import calculate_trade_value
 
 player_url_template = load_player_url_template()
 
@@ -106,25 +107,25 @@ def add_pitcher_tab(notebook, font):
 
     ALL_COLS = (
         "Name", "Team", "Age", "POS", "Prone", "Scout Accuracy", "Throws", "Velo", "#Pitches", "G/F",
-        "Pitch Score", "Pitch Pot. Score", "Potential Score", "Current Score", "Total Score"
+        "Pitch Score", "Pitch Pot. Score", "Potential Score", "Current Score", "Total Score", "Trade Value"
     )
 
     TOP20_COLS = (
         "Rank", "Name", "Team", "Age", "POS", "Throws", "Velo", "#Pitches", "G/F",
-        "Pitch Score", "Pitch Pot. Score", "Potential Score", "Current Score", "Total Score"
+        "Pitch Score", "Pitch Pot. Score", "Potential Score", "Current Score", "Total Score", "Trade Value"
     )
 
     column_widths_all = {
         "Rank": 38, "Name": 150, "Team": 55, "Age": 42, "POS": 46, "Prone": 65, "Scout Accuracy": 85,
         "Throws": 40, "Velo": 55, "#Pitches": 52, "G/F": 48, "Pitch Score": 78, "Pitch Pot. Score": 98,
-        "Potential Score": 110, "Current Score": 110, "Total Score": 95,
+        "Potential Score": 110, "Current Score": 110, "Total Score": 95, "Trade Value": 85,
     }
 
     column_widths_top = {
         "Rank": 130, "Name": 185, "Team": 110, "Age": 60, "POS": 80,
         "Throws": 68, "Velo": 80, "#Pitches": 74, "G/F": 66,
         "Pitch Score": 119, "Pitch Pot. Score": 130, "Potential Score": 132,
-        "Current Score": 132, "Total Score": 130,
+        "Current Score": 132, "Total Score": 130, "Trade Value": 95,
     }
 
     def set_all(val):
@@ -341,6 +342,10 @@ def add_pitcher_tab(notebook, font):
             player_id = p.get("ID", "")
             pos = "RP" if p.get("POS") == "CL" else p.get("POS")
             row_tags = get_pitcher_highlight_tags(p)
+            
+            # Calculate trade value
+            trade_value_data = calculate_trade_value(p, "pitcher")
+            trade_value_display = f"{trade_value_data['tier_icon']} {trade_value_data['trade_value']}"
 
             values = (
                 p.get("Name", ""), p.get("ORG", ""), p.get("Age", ""), pos,
@@ -350,7 +355,8 @@ def add_pitcher_tab(notebook, font):
                 p["Scores"].get("pitches_potential", 0),
                 p["Scores"].get("core_potential", 0) + p["Scores"].get("pitches_potential", 0),
                 p["Scores"].get("curr_total", 0),
-                p["Scores"].get("total", 0)
+                p["Scores"].get("total", 0),
+                trade_value_display
             )
 
             iid = table.insert("", "end", values=values, tags=row_tags)
@@ -382,6 +388,10 @@ def add_pitcher_tab(notebook, font):
 
             for rank, (score, p) in enumerate(top20, 1):
                 row_tags = []
+                
+                # Calculate trade value
+                trade_value_data = calculate_trade_value(p, "pitcher")
+                trade_value_display = f"{trade_value_data['tier_icon']} {trade_value_data['trade_value']}"
 
                 values = (
                     rank, p.get("Name", ""), p.get("ORG", ""), p.get("Age", ""), pos,
@@ -390,7 +400,8 @@ def add_pitcher_tab(notebook, font):
                     p["Scores"].get("pitches_potential", 0),
                     p["Scores"].get("core_potential", 0) + p["Scores"].get("pitches_potential", 0),
                     p["Scores"].get("curr_total", 0),
-                    p["Scores"].get("total", 0)
+                    p["Scores"].get("total", 0),
+                    trade_value_display
                 )
 
                 iid = table.insert("", "end", values=values, tags=row_tags)

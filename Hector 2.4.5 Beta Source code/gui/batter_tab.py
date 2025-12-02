@@ -15,6 +15,7 @@ from .tooltips import (
     attach_treeview_row_tooltips, HIGHLIGHT_EXPLANATIONS, add_button_tooltip
 )
 from batters import calculate_batter_score
+from trade_value import calculate_trade_value
 
 player_url_template = load_player_url_template()
 
@@ -82,25 +83,25 @@ def add_batter_tab(notebook, font):
 
     ALL_COLS = (
         "Name", "Team", "Age", "POS", "Bats", "Prone", "Scout Accuracy",
-        "OVR Stars", "POT Stars", "Offense", "Offense Pot.", "Defense", "Total Score"
+        "OVR Stars", "POT Stars", "Offense", "Offense Pot.", "Defense", "Total Score", "Trade Value"
     )
 
     TOP10_COLS = (
         "Rank", "Name", "Team", "Age", "POS", "Bats", "Prone", "Scout Accuracy",
-        "Offense", "Offense Pot.", "Defense", "Total Score"
+        "Offense", "Offense Pot.", "Defense", "Total Score", "Trade Value"
     )
 
     column_widths_all = {
         "Rank": 38, "Name": 150, "Team": 55, "Age": 42, "POS": 46,
         "Bats": 54, "Prone": 65, "Scout Accuracy": 85, "OVR Stars": 63,
         "POT Stars": 65, "Offense": 78, "Offense Pot.": 98,
-        "Defense": 72, "Total Score": 95,
+        "Defense": 72, "Total Score": 95, "Trade Value": 85,
     }
 
     column_widths_top = {
         "Rank": 110, "Name": 180, "Team": 100, "Age": 55, "POS": 70,
         "Bats": 65, "Prone": 80, "Scout Accuracy": 105, "Offense": 108,
-        "Offense Pot.": 120, "Defense": 88, "Total Score": 120,
+        "Offense Pot.": 120, "Defense": 88, "Total Score": 120, "Trade Value": 95,
     }
 
     def on_filter_or_search_change():
@@ -361,12 +362,16 @@ def add_batter_tab(notebook, font):
             pos = b.get("POS", "")
             age_raw = b.get("Age", "")
             row_tags = get_batter_highlight_tags(b)
+            
+            # Calculate trade value
+            trade_value_data = calculate_trade_value(b, "batter")
+            trade_value_display = f"{trade_value_data['tier_icon']} {trade_value_data['trade_value']}"
 
             values = (
                 b.get("Name", ""), b.get("ORG", ""), age_raw, pos, b.get("B", ""), b.get("Prone", ""),
                 b.get("SctAcc", ""), b.get("OVR", "0 Stars"), b.get("POT", "0 Stars"),
                 b["Scores"].get("offense", 0), b["Scores"].get("offense_potential", 0),
-                b["Scores"].get("defense", 0), b["Scores"].get("total", 0)
+                b["Scores"].get("defense", 0), b["Scores"].get("total", 0), trade_value_display
             )
 
             iid = table.insert("", "end", values=values, tags=row_tags)
@@ -423,13 +428,17 @@ def add_batter_tab(notebook, font):
 
             for rank, (score, b) in enumerate(top10, 1):
                 row_tags = []
+                
+                # Calculate trade value
+                trade_value_data = calculate_trade_value(b, "batter")
+                trade_value_display = f"{trade_value_data['tier_icon']} {trade_value_data['trade_value']}"
 
                 values = (
                     rank,
                     b.get("Name", ""), b.get("ORG", ""), b.get("Age", ""), b.get("POS", ""),
                     b.get("B", ""), b.get("Prone", ""), b.get("SctAcc", ""),
                     b["Scores"].get("offense", 0), b["Scores"].get("offense_potential", 0),
-                    b["Scores"].get("defense", 0), b["Scores"].get("total", 0)
+                    b["Scores"].get("defense", 0), b["Scores"].get("total", 0), trade_value_display
                 )
 
                 iid = table.insert("", "end", values=values, tags=row_tags)
