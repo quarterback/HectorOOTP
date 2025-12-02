@@ -67,6 +67,27 @@ EXTENSION_GRADES = {
 # League average $/WAR (used for surplus value calculation)
 LEAGUE_AVG_DOLLAR_PER_WAR = 8.0  # In millions, typical MLB value
 
+# Trade value calculation constants
+# OVR ratings in OOTP can be star ratings (1.0-5.0) or numeric (20-80 scale)
+STAR_RATING_MAX = 5.0  # Maximum star rating value
+NUMERIC_RATING_THRESHOLD = 10  # Values above this are assumed to be numeric scale (20-80)
+
+# Extension impact constants
+EXPENSIVE_EXTENSION_PENALTY = -2  # Trade value penalty for expensive extensions (AAV >= $20M)
+CHEAP_EXTENSION_BONUS = 2  # Trade value bonus for cheap extensions (AAV < $10M)
+
+# Trade value component scaling
+# Current production is scaled from 40 points (original) to 35 points (new weight)
+CURRENT_PRODUCTION_SCALE_FACTOR = 0.875  # 35/40 = 0.875
+
+# Status multiplier scaling bounds
+STATUS_MULTIPLIER_MIN = 0.9   # Minimum effect of status multiplier on total
+STATUS_MULTIPLIER_MAX = 1.1   # Maximum effect of status multiplier on total
+STATUS_MULTIPLIER_SCALE = 0.5  # Scaling factor for status multiplier effect
+
+# Default AAV ratio when expected AAV is zero (indicates overpay for non-producing player)
+DEFAULT_OVERPAY_RATIO = 2.0  # Treated as moderate overpay rather than extreme
+
 
 def parse_number(value):
     """Parse numeric value, handling '-' and empty strings"""
@@ -261,8 +282,9 @@ def get_extension_analysis(player, player_type="batter"):
     if expected_aav <= 0:
         expected_aav = 5.0  # Minimum expected for a major league player
     
-    # Grade the extension
-    aav_ratio = extension_aav / expected_aav if expected_aav > 0 else 999
+    # Grade the extension - calculate AAV ratio
+    # Use DEFAULT_OVERPAY_RATIO when expected_aav is 0 to indicate moderate overpay
+    aav_ratio = extension_aav / expected_aav if expected_aav > 0 else DEFAULT_OVERPAY_RATIO
     
     red_flags = []
     
@@ -271,9 +293,10 @@ def get_extension_analysis(player, player_type="batter"):
         red_flags.append(f"Age {age} + {ety} year extension")
     if "fragile" in prone or "prone" in prone:
         red_flags.append("Durability concerns")
-    if ovr <= 10:  # Assuming star rating
-        if ovr <= 3.0 and ety >= 4:
-            red_flags.append("Low OVR with long extension")
+    # OVR can be star rating (1.0-5.0) or numeric (20-80)
+    # For star ratings, 3.0 or below with long extension is a concern
+    if ovr <= NUMERIC_RATING_THRESHOLD and ovr <= 3.0 and ety >= 4:
+        red_flags.append("Low OVR with long extension")
     
     # Determine grade
     if aav_ratio <= 0.7:
@@ -453,17 +476,17 @@ def calculate_contract_value_score(player):
     else:
         aav_score = 0  # Very high AAV = slight penalty
     
-    # Extension impact (0-2 points bonus or penalty)
+    # Extension impact (bonus or penalty based on extension AAV)
     extension_score = 0
     if has_extension:
         extension_aav = ecv / ety if ety > 0 else 0
         # Team-friendly extension = bonus, overpay = penalty
         if extension_aav < 10:
-            extension_score = 2  # Good extension
+            extension_score = CHEAP_EXTENSION_BONUS  # Good extension
         elif extension_aav < 20:
             extension_score = 0  # Neutral
         else:
-            extension_score = -2  # Expensive extension (harder to trade)
+            extension_score = EXPENSIVE_EXTENSION_PENALTY  # Expensive extension (harder to trade)
     
     total_score = years_score + status_score + aav_score + extension_score
     return round(max(0, min(25, total_score)), 2)
@@ -501,8 +524,8 @@ def calculate_trade_value(player, player_type="batter"):
     Returns dict with trade value and component breakdown
     """
     current_prod = calculate_current_production_score(player, player_type)
-    # Scale current production to 0-35 (from 0-40)
-    current_prod = round(current_prod * 0.875, 2)
+    # Scale current production from 0-40 to 0-35 points (new weight)
+    current_prod = round(current_prod * CURRENT_PRODUCTION_SCALE_FACTOR, 2)
     
     future_value = calculate_future_value_score(player)
     contract_value = calculate_contract_value_score(player)  # Now returns 0-25
@@ -516,8 +539,12 @@ def calculate_trade_value(player, player_type="batter"):
     # Total trade value (scaled 1-100)
     raw_total = current_prod + future_value + contract_value + position_scarcity
     
-    # Apply status multiplier to the total (capped effect)
-    adjusted_total = raw_total * min(1.1, max(0.9, (status_multiplier - 1) * 0.5 + 1))
+    # Apply status multiplier to the total with bounded effect
+    # Formula: clamp the multiplier effect between MIN and MAX
+    # The (status_multiplier - 1) * SCALE + 1 transforms the multiplier to a smaller range
+    multiplier_effect = (status_multiplier - 1) * STATUS_MULTIPLIER_SCALE + 1
+    bounded_multiplier = min(STATUS_MULTIPLIER_MAX, max(STATUS_MULTIPLIER_MIN, multiplier_effect))
+    adjusted_total = raw_total * bounded_multiplier
     trade_value = max(1, min(100, round(adjusted_total)))
     
     tier = get_trade_value_tier(trade_value)

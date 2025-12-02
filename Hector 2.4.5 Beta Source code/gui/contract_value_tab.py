@@ -221,6 +221,10 @@ def add_contract_value_tab(notebook, font):
                 if war < min_war:
                     continue
                 
+                # Parse YL once and reuse
+                yl_data = parse_years_left(b.get("YL", ""))
+                years_left = yl_data.get("years", 0)
+                
                 # Get enhanced contract data
                 category_name, category_icon, category_color = get_contract_category(b, "batter")
                 full_category = f"{category_icon} {category_name}"
@@ -252,7 +256,7 @@ def add_contract_value_tab(notebook, font):
                     "war": war,
                     "aav": aav,
                     "contract_status": contract_status,
-                    "yl": parse_years_left(b.get("YL", "")).get("years", 0),
+                    "yl": years_left,
                     "total_commitment": commitment["total_value"],
                     "dpw_display": dpw_display,
                     "dpw_value": dollars_per_war,
@@ -276,6 +280,10 @@ def add_contract_value_tab(notebook, font):
                 war = parse_number(p.get("WAR (Pitcher)", p.get("WAR", 0)))
                 if war < min_war:
                     continue
+                
+                # Parse YL once and reuse
+                yl_data = parse_years_left(p.get("YL", ""))
+                years_left = yl_data.get("years", 0)
                 
                 category_name, category_icon, category_color = get_contract_category(p, "pitcher")
                 full_category = f"{category_icon} {category_name}"
@@ -307,7 +315,7 @@ def add_contract_value_tab(notebook, font):
                     "war": war,
                     "aav": aav,
                     "contract_status": contract_status,
-                    "yl": parse_years_left(p.get("YL", "")).get("years", 0),
+                    "yl": years_left,
                     "total_commitment": commitment["total_value"],
                     "dpw_display": dpw_display,
                     "dpw_value": dollars_per_war,
