@@ -89,7 +89,7 @@ Hector can run from source on macOS:
 
 2. Navigate to the source code directory:
    ```bash
-   cd "HectorOOTP/Hector 2.4.5 Beta Source code"
+   cd "HectorOOTP/Hector 2.5 Source Code"
    ```
 
 3. Install dependencies:
