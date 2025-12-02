@@ -1,7 +1,7 @@
 # Percentile Rankings Calculator
 # Calculates league-wide percentiles for player metrics
 
-from trade_value import parse_number
+from player_utils import parse_star_rating
 
 # Percentile Tier Definitions
 PERCENTILE_TIERS = {
@@ -54,28 +54,6 @@ PITCHER_METRICS = {
     "OVR": {"key": "OVR", "label": "Overall", "inverse": False},
     "POT": {"key": "POT", "label": "Potential", "inverse": False},
 }
-
-
-def parse_star_rating(val):
-    """Convert star rating or numeric value to float"""
-    if not val:
-        return 0.0
-    val = str(val).strip()
-    if "Stars" in val:
-        try:
-            return float(val.split()[0])
-        except (ValueError, IndexError):
-            return 0.0
-    # Handle percentage values like "12.5%"
-    if "%" in val:
-        try:
-            return float(val.replace("%", ""))
-        except ValueError:
-            return 0.0
-    try:
-        return float(val)
-    except ValueError:
-        return 0.0
 
 
 def get_metric_value(player, metric_config):

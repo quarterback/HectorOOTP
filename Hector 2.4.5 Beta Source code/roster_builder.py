@@ -3,36 +3,7 @@
 
 from trade_value import parse_number, parse_salary, parse_years_left
 from archetypes import get_best_archetype, ARCHETYPES
-
-def parse_star_rating(val):
-    """Convert star rating or numeric value to float"""
-    if not val:
-        return 0.0
-    val = str(val).strip()
-    if "Stars" in val:
-        try:
-            return float(val.split()[0])
-        except (ValueError, IndexError):
-            return 0.0
-    try:
-        return float(val)
-    except ValueError:
-        return 0.0
-
-
-def get_age(player):
-    """Get player age as integer"""
-    try:
-        return int(player.get("Age", 0))
-    except (ValueError, TypeError):
-        return 0
-
-
-def get_war(player, player_type="batter"):
-    """Get WAR value for a player"""
-    if player_type == "pitcher":
-        return parse_number(player.get("WAR (Pitcher)", player.get("WAR", 0)))
-    return parse_number(player.get("WAR (Batter)", player.get("WAR", 0)))
+from player_utils import parse_star_rating, get_age, get_war, normalize_rating, STAR_TO_RATING_SCALE
 
 
 # Roster slot definitions
@@ -70,9 +41,8 @@ def get_grade_for_ovr(ovr, league_avg=55):
     Get letter grade for an OVR value.
     Handles both 20-80 scale and star scale.
     """
-    # Normalize to 20-80 scale if needed
-    if ovr <= 10:  # Star scale (1-5 or 1-10)
-        ovr = ovr * 16  # Convert to ~20-80 range
+    # Normalize to 20-80 scale if needed using shared utility
+    ovr = normalize_rating(ovr)
     
     for grade, info in GRADE_THRESHOLDS.items():
         if ovr >= info["min"]:

@@ -492,7 +492,7 @@ def add_roster_builder_tab(notebook, font):
             val = player.get("WAR (Batter)", player.get("WAR", 0))
         try:
             return float(str(val).replace("-", "0"))
-        except:
+        except (ValueError, TypeError, AttributeError):
             return 0
     
     def get_ovr(player):
@@ -501,11 +501,11 @@ def add_roster_builder_tab(notebook, font):
         if "Stars" in str(ovr):
             try:
                 return float(str(ovr).split()[0])
-            except:
+            except (ValueError, TypeError, IndexError, AttributeError):
                 return 0
         try:
             return float(ovr)
-        except:
+        except (ValueError, TypeError):
             return 0
     
     def update_pool_table():

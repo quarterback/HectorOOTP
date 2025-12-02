@@ -2,37 +2,7 @@
 # Detects overlooked players who deserve a second look
 
 from trade_value import parse_number, parse_salary, parse_years_left
-
-
-def parse_star_rating(val):
-    """Convert star rating or numeric value to float"""
-    if not val:
-        return 0.0
-    val = str(val).strip()
-    if "Stars" in val:
-        try:
-            return float(val.split()[0])
-        except (ValueError, IndexError):
-            return 0.0
-    try:
-        return float(val)
-    except ValueError:
-        return 0.0
-
-
-def get_age(player):
-    """Get player age as integer"""
-    try:
-        return int(player.get("Age", 0))
-    except (ValueError, TypeError):
-        return 0
-
-
-def get_war(player, player_type="batter"):
-    """Get WAR value for a player"""
-    if player_type == "pitcher":
-        return parse_number(player.get("WAR (Pitcher)", player.get("WAR", 0)))
-    return parse_number(player.get("WAR (Batter)", player.get("WAR", 0)))
+from player_utils import parse_star_rating, get_age, get_war
 
 
 # Hidden Gem Category Definitions
