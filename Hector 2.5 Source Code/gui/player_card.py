@@ -4,6 +4,7 @@
 import tkinter as tk
 from tkinter import ttk
 from percentiles import get_percentile_calculator, PERCENTILE_TIERS
+from archetypes import get_player_archetype_fits, get_best_archetype, ARCHETYPES
 
 
 def show_player_card(parent, player, player_type="batter"):
@@ -18,7 +19,7 @@ def show_player_card(parent, player, player_type="batter"):
     # Create popup window
     popup = tk.Toplevel(parent)
     popup.title(f"Player Card - {player.get('Name', 'Unknown')}")
-    popup.geometry("600x500")
+    popup.geometry("650x650")
     popup.configure(bg="#1e1e1e")
     
     # Make it modal-ish
@@ -241,6 +242,114 @@ def show_player_card(parent, player, player_type="batter"):
             bg="#2a2a2a",
             fg="#d4d4d4"
         ).pack(side="left", padx=10)
+    
+    # Archetype Fits Section
+    ttk.Separator(popup, orient="horizontal").pack(fill="x", padx=20, pady=10)
+    
+    archetype_frame = tk.Frame(popup, bg="#1e1e1e")
+    archetype_frame.pack(fill="x", padx=20, pady=5)
+    
+    tk.Label(
+        archetype_frame,
+        text="🎯 Archetype Fits",
+        font=("Consolas", 12, "bold"),
+        bg="#1e1e1e",
+        fg="#ffd43b"
+    ).pack(anchor="w")
+    
+    # Get archetype fits for this player
+    archetype_fits = get_player_archetype_fits(player, player_type)
+    best_archetype = get_best_archetype(player, player_type)
+    
+    if archetype_fits:
+        # Show best archetype prominently
+        if best_archetype and best_archetype["score"] >= 40:
+            best_frame = tk.Frame(archetype_frame, bg="#2a2a2a", relief="raised", bd=1)
+            best_frame.pack(fill="x", pady=5)
+            
+            tk.Label(
+                best_frame,
+                text=f"Best Fit: {best_archetype['icon']} {best_archetype['name']}",
+                font=("Consolas", 11, "bold"),
+                bg="#2a2a2a",
+                fg="#00ff7f"
+            ).pack(side="left", padx=10, pady=5)
+            
+            tk.Label(
+                best_frame,
+                text=f"{best_archetype['score']:.0f} - {best_archetype['label']}",
+                font=("Consolas", 10),
+                bg="#2a2a2a",
+                fg="#888888"
+            ).pack(side="left", padx=10, pady=5)
+        
+        # Show other good fits (score >= 40, sorted)
+        sorted_fits = sorted(
+            [(k, v) for k, v in archetype_fits.items() if v["score"] >= 40],
+            key=lambda x: x[1]["score"],
+            reverse=True
+        )
+        
+        if sorted_fits:
+            other_frame = tk.Frame(archetype_frame, bg="#1e1e1e")
+            other_frame.pack(fill="x", pady=5)
+            
+            for i, (arch_key, fit_info) in enumerate(sorted_fits[:6]):  # Show top 6
+                arch_info = ARCHETYPES.get(arch_key, {})
+                
+                fit_frame = tk.Frame(other_frame, bg="#1e1e1e")
+                fit_frame.pack(fill="x", pady=1)
+                
+                # Color based on fit level
+                if fit_info["score"] >= 80:
+                    score_color = "#51cf66"  # Green
+                elif fit_info["score"] >= 60:
+                    score_color = "#4dabf7"  # Blue
+                else:
+                    score_color = "#ffd43b"  # Yellow
+                
+                tk.Label(
+                    fit_frame,
+                    text=f"{arch_info.get('icon', '•')} {fit_info['archetype_name']}",
+                    font=("Consolas", 10),
+                    bg="#1e1e1e",
+                    fg="#d4d4d4",
+                    width=22,
+                    anchor="w"
+                ).pack(side="left")
+                
+                tk.Label(
+                    fit_frame,
+                    text=f"{fit_info['score']:.0f}",
+                    font=("Consolas", 10, "bold"),
+                    bg="#1e1e1e",
+                    fg=score_color,
+                    width=4
+                ).pack(side="left")
+                
+                tk.Label(
+                    fit_frame,
+                    text=fit_info['label'],
+                    font=("Consolas", 9),
+                    bg="#1e1e1e",
+                    fg="#888888"
+                ).pack(side="left", padx=5)
+        else:
+            tk.Label(
+                archetype_frame,
+                text="No strong archetype fits (score < 40)",
+                font=("Consolas", 10),
+                bg="#1e1e1e",
+                fg="#888888"
+            ).pack(anchor="w", pady=5)
+    else:
+        tk.Label(
+            archetype_frame,
+            text="No archetype data available",
+            font=("Consolas", 10),
+            bg="#1e1e1e",
+            fg="#888888"
+        ).pack(anchor="w", pady=5)
     
     # Close button
     close_btn = ttk.Button(popup, text="Close", command=popup.destroy)

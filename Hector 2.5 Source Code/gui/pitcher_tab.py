@@ -8,6 +8,7 @@ from .widgets import (
     filter_players,
     get_pitcher_highlight_tags,
     make_debounced_callback,
+    bind_player_card_right_click,
 )
 from .tooltips import (
     add_search_tooltip, attach_treeview_heading_tooltips, PITCHER_COL_TOOLTIPS,
@@ -195,6 +196,7 @@ def add_pitcher_tab(notebook, font):
     hsb.config(command=table.xview)
 
     id_map = {}
+    player_data_map = {}  # Maps iid -> player dict for right-click
 
     table.tag_configure("hover", background="#333")
     table.tag_configure("rp_sp_potential", background="#384574")
@@ -207,6 +209,9 @@ def add_pitcher_tab(notebook, font):
 
     attach_treeview_heading_tooltips(table, PITCHER_COL_TOOLTIPS)
     attach_treeview_row_tooltips(table, HIGHLIGHT_EXPLANATIONS)
+    
+    # Bind right-click for player card popup
+    bind_player_card_right_click(table, player_data_map, lambda p: (p, "pitcher"))
 
     add_pitcher_tab.CURRENT_PITCHERS = []
     
@@ -337,6 +342,7 @@ def add_pitcher_tab(notebook, font):
 
         table.delete(*table.get_children())
         id_map.clear()
+        player_data_map.clear()
 
         for p in get_filtered_pitchers():
             player_id = p.get("ID", "")
@@ -361,6 +367,7 @@ def add_pitcher_tab(notebook, font):
 
             iid = table.insert("", "end", values=values, tags=row_tags)
             id_map[iid] = player_id
+            player_data_map[iid] = p
 
         make_treeview_open_link_handler(table, id_map, lambda pid: player_url_template.format(pid=pid))
 
@@ -370,6 +377,7 @@ def add_pitcher_tab(notebook, font):
 
         table.delete(*table.get_children())
         id_map.clear()
+        player_data_map.clear()
 
         by_pos = {}
         for p in get_filtered_pitchers():
@@ -406,6 +414,7 @@ def add_pitcher_tab(notebook, font):
 
                 iid = table.insert("", "end", values=values, tags=row_tags)
                 id_map[iid] = p.get("ID", "")
+                player_data_map[iid] = p
 
         make_treeview_open_link_handler(table, id_map, lambda pid: player_url_template.format(pid=pid))
         table.yview_moveto(0)
