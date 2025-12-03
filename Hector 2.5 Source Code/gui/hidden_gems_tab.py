@@ -4,8 +4,9 @@
 import tkinter as tk
 from tkinter import ttk
 from .style import on_treeview_motion, on_leave, sort_treeview
-from .widgets import make_treeview_open_link_handler, load_player_url_template
+from .widgets import make_treeview_open_link_handler, load_player_url_template, bind_player_card_right_click
 from hidden_gems import find_all_hidden_gems, HIDDEN_GEM_CATEGORIES, get_hidden_gems_summary
+from archetypes import ARCHETYPES, get_best_archetype
 
 player_url_template = load_player_url_template()
 
@@ -76,6 +77,21 @@ def add_hidden_gems_tab(notebook, font):
         width=8
     )
     pos_combo.pack(side="left", padx=5)
+    
+    # Archetype filter
+    tk.Label(filter_frame, text="Archetype:", bg="#1e1e1e", fg="#d4d4d4", font=font).pack(side="left", padx=(15, 0))
+    archetype_var = tk.StringVar(value="All")
+    archetype_options = ["All"]
+    for key, info in ARCHETYPES.items():
+        archetype_options.append(f"{info['icon']} {info['name']}")
+    archetype_combo = ttk.Combobox(
+        filter_frame,
+        textvariable=archetype_var,
+        values=archetype_options,
+        state="readonly",
+        width=20
+    )
+    archetype_combo.pack(side="left", padx=5)
     
     # Summary label
     summary_var = tk.StringVar(value="")
@@ -215,15 +231,27 @@ def add_hidden_gems_tab(notebook, font):
     table.bind("<Leave>", on_leave)
     
     id_map = {}
+    player_data_map = {}  # Maps iid -> player dict for right-click
+    
+    # Define player type detection function for right-click
+    PITCHER_POSITIONS = {"SP", "RP", "CL", "P"}
+    def get_player_type(player):
+        pos = player.get("POS", "").upper()
+        return "pitcher" if pos in PITCHER_POSITIONS else "batter"
+    
+    # Bind right-click for player card popup
+    bind_player_card_right_click(table, player_data_map, lambda p: (p, get_player_type(p)))
     
     def update_table():
         """Update the results table based on filters"""
         table.delete(*table.get_children())
         id_map.clear()
+        player_data_map.clear()
         
         selected_label = category_combo.get()
         selected_category = category_map.get(selected_label, "all")
         pos_filter = pos_var.get()
+        archetype_filter = archetype_var.get()
         
         # Gather results
         results = []
@@ -242,6 +270,19 @@ def add_hidden_gems_tab(notebook, font):
         # Apply position filter
         if pos_filter != "All":
             results = [(cat, p) for cat, p in results if p.get("pos") == pos_filter]
+        
+        # Apply archetype filter
+        if archetype_filter != "All":
+            filtered_results = []
+            for cat, p in results:
+                player = p.get("player", {})
+                player_type = get_player_type(player)
+                best_arch = get_best_archetype(player, player_type)
+                if best_arch:
+                    arch_display = f"{best_arch['icon']} {best_arch['name']}"
+                    if arch_display == archetype_filter:
+                        filtered_results.append((cat, p))
+            results = filtered_results
         
         # Populate table
         for cat_key, player_info in results:
@@ -266,6 +307,7 @@ def add_hidden_gems_tab(notebook, font):
             player_id = player.get("ID", "")
             if player_id:
                 id_map[iid] = player_id
+            player_data_map[iid] = player
         
         # Update summary
         summary_var.set(f"Found {len(results)} hidden gems")
@@ -282,6 +324,7 @@ def add_hidden_gems_tab(notebook, font):
     # Bind filter changes
     category_combo.bind("<<ComboboxSelected>>", lambda e: update_table())
     pos_combo.bind("<<ComboboxSelected>>", lambda e: update_table())
+    archetype_combo.bind("<<ComboboxSelected>>", lambda e: update_table())
     
     class HiddenGemsTab:
         def refresh(self, pitchers, batters):

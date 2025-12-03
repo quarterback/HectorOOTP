@@ -353,3 +353,63 @@ def show_loading_bar(
     root.update_idletasks()
     root.update()
     return frame, progress
+
+
+def bind_player_card_right_click(table, id_map, player_lookup, player_type_func=None):
+    """
+    Bind right-click event to a treeview table to show player card popup.
+    
+    Args:
+        table: ttk.Treeview widget
+        id_map: dict mapping treeview item IDs to player data (player dict or player ID)
+        player_lookup: function that takes player ID/data and returns (player_dict, player_type)
+        player_type_func: optional function to determine player type from player dict
+                         If None, defaults to checking if POS is in pitcher positions
+    """
+    from .player_card import show_player_card
+    
+    PITCHER_POSITIONS = {"SP", "RP", "CL", "P"}
+    
+    def determine_player_type(player):
+        """Determine if player is pitcher or batter"""
+        if player_type_func:
+            return player_type_func(player)
+        pos = player.get("POS", "").upper()
+        if pos in PITCHER_POSITIONS:
+            return "pitcher"
+        return "batter"
+    
+    def on_right_click(event):
+        # Get the item under the cursor
+        item = table.identify_row(event.y)
+        if not item:
+            return
+        
+        # Get player data
+        player_data = id_map.get(item)
+        if not player_data:
+            return
+        
+        # If player_data is a dict, use it directly
+        # Otherwise, call lookup function
+        if isinstance(player_data, dict):
+            player = player_data
+            player_type = determine_player_type(player)
+        else:
+            result = player_lookup(player_data)
+            if not result:
+                return
+            if isinstance(result, tuple):
+                player, player_type = result
+            else:
+                player = result
+                player_type = determine_player_type(player)
+        
+        # Show player card popup
+        root = table.winfo_toplevel()
+        show_player_card(root, player, player_type)
+    
+    # Bind right-click - Button-3 works on Windows/Linux/macOS
+    table.bind("<Button-3>", on_right_click)
+    # Control+Click as alternative for macOS users without a right-click mouse
+    table.bind("<Control-Button-1>", on_right_click)

@@ -4,11 +4,13 @@ from .style import on_treeview_motion, on_leave, sort_treeview
 from .widgets import (
     make_treeview_open_link_handler,
     load_player_url_template,
+    bind_player_card_right_click,
 )
 from .tooltips import add_button_tooltip
 from trade_value import parse_number, parse_years_left, get_contract_status, parse_salary
 from team_parser import calculate_surplus_value, get_surplus_tier, get_park_factor_context
 from player_utils import parse_star_rating
+from archetypes import ARCHETYPES, get_best_archetype
 
 player_url_template = load_player_url_template()
 
@@ -134,6 +136,16 @@ def add_trade_finder_tab(notebook, font):
     vet_table.bind("<Leave>", on_leave)
     
     vet_id_map = {}
+    vet_player_data_map = {}  # Maps iid -> player dict for right-click
+    
+    # Player type detection
+    PITCHER_POSITIONS = {"SP", "RP", "CL", "P"}
+    def get_player_type(player):
+        pos = player.get("POS", "").upper()
+        return "pitcher" if pos in PITCHER_POSITIONS else "batter"
+    
+    # Bind right-click for player card popup
+    bind_player_card_right_click(vet_table, vet_player_data_map, lambda p: (p, get_player_type(p)))
     
     # Right panel - High-Upside Prospects (Buy Low)
     right_frame = tk.Frame(main_container, bg="#1e1e1e", relief="ridge", bd=2)
@@ -216,6 +228,10 @@ def add_trade_finder_tab(notebook, font):
     pros_table.bind("<Leave>", on_leave)
     
     pros_id_map = {}
+    pros_player_data_map = {}  # Maps iid -> player dict for right-click
+    
+    # Bind right-click for player card popup
+    bind_player_card_right_click(pros_table, pros_player_data_map, lambda p: (p, get_player_type(p)))
     
     def parse_star_rating(val):
         """Convert star rating string to numeric value"""
@@ -442,6 +458,7 @@ def add_trade_finder_tab(notebook, font):
         """Update the veterans table with current filter settings"""
         vet_table.delete(*vet_table.get_children())
         vet_id_map.clear()
+        vet_player_data_map.clear()
         
         veterans = get_expiring_veterans()
         
@@ -465,6 +482,7 @@ def add_trade_finder_tab(notebook, font):
             player_id = vet["player"].get("ID", "")
             if player_id:
                 vet_id_map[iid] = player_id
+            vet_player_data_map[iid] = vet["player"]
         
         make_treeview_open_link_handler(vet_table, vet_id_map, lambda pid: player_url_template.format(pid=pid))
     
@@ -472,6 +490,7 @@ def add_trade_finder_tab(notebook, font):
         """Update the prospects table with current filter settings"""
         pros_table.delete(*pros_table.get_children())
         pros_id_map.clear()
+        pros_player_data_map.clear()
         
         prospects = get_high_upside_prospects()
         
@@ -495,6 +514,7 @@ def add_trade_finder_tab(notebook, font):
             player_id = pros["player"].get("ID", "")
             if player_id:
                 pros_id_map[iid] = player_id
+            pros_player_data_map[iid] = pros["player"]
         
         make_treeview_open_link_handler(pros_table, pros_id_map, lambda pid: player_url_template.format(pid=pid))
     
@@ -569,6 +589,21 @@ def add_trade_finder_tab(notebook, font):
     surplus_age_entry = tk.Entry(surplus_filter_frame, textvariable=surplus_age_var, width=4, bg="#000000", fg="#d4d4d4", font=font)
     surplus_age_entry.pack(side="left", padx=5)
     
+    # Archetype filter
+    tk.Label(surplus_filter_frame, text="Archetype:", bg="#1e1e1e", fg="#d4d4d4", font=font).pack(side="left", padx=(10, 0))
+    surplus_archetype_var = tk.StringVar(value="All")
+    surplus_archetype_options = ["All"]
+    for key, info in ARCHETYPES.items():
+        surplus_archetype_options.append(f"{info['icon']} {info['name']}")
+    surplus_archetype_combo = ttk.Combobox(
+        surplus_filter_frame,
+        textvariable=surplus_archetype_var,
+        values=surplus_archetype_options,
+        state="readonly",
+        width=20
+    )
+    surplus_archetype_combo.pack(side="left", padx=5)
+    
     # Surplus value table
     surplus_table_frame = tk.Frame(surplus_container, bg="#1e1e1e")
     surplus_table_frame.pack(fill="both", expand=True, padx=5, pady=5)
@@ -608,6 +643,10 @@ def add_trade_finder_tab(notebook, font):
     surplus_table.bind("<Leave>", on_leave)
     
     surplus_id_map = {}
+    surplus_player_data_map = {}  # Maps iid -> player dict for right-click
+    
+    # Bind right-click for player card popup
+    bind_player_card_right_click(surplus_table, surplus_player_data_map, lambda p: (p, get_player_type(p)))
     
     def get_surplus_value_players():
         """Find players with positive surplus value"""
@@ -622,6 +661,7 @@ def add_trade_finder_tab(notebook, font):
             max_age = 35
         
         pos_filter = surplus_pos_var.get()
+        archetype_filter = surplus_archetype_var.get()
         players_with_surplus = []
         
         # Process pitchers
@@ -637,6 +677,12 @@ def add_trade_finder_tab(notebook, font):
             pos = p.get("POS", "")
             if pos_filter != "All" and pos != pos_filter:
                 continue
+            
+            # Archetype filter
+            if archetype_filter != "All":
+                best_arch = get_best_archetype(p, "pitcher")
+                if not best_arch or f"{best_arch['icon']} {best_arch['name']}" != archetype_filter:
+                    continue
             
             # Get WAR and salary
             war = parse_number(p.get("WAR (Pitcher)", p.get("WAR", 0)))
@@ -685,6 +731,12 @@ def add_trade_finder_tab(notebook, font):
             if pos_filter != "All" and pos != pos_filter:
                 continue
             
+            # Archetype filter
+            if archetype_filter != "All":
+                best_arch = get_best_archetype(b, "batter")
+                if not best_arch or f"{best_arch['icon']} {best_arch['name']}" != archetype_filter:
+                    continue
+            
             # Get WAR and salary
             war = parse_number(b.get("WAR (Batter)", b.get("WAR", 0)))
             salary = parse_salary(b.get("SLR", 0))
@@ -726,6 +778,7 @@ def add_trade_finder_tab(notebook, font):
         """Update the surplus value table"""
         surplus_table.delete(*surplus_table.get_children())
         surplus_id_map.clear()
+        surplus_player_data_map.clear()
         
         players = get_surplus_value_players()
         
@@ -769,11 +822,13 @@ def add_trade_finder_tab(notebook, font):
             player_id = player_data["player"].get("ID", "")
             if player_id:
                 surplus_id_map[iid] = player_id
+            surplus_player_data_map[iid] = player_data["player"]
         
         make_treeview_open_link_handler(surplus_table, surplus_id_map, lambda pid: player_url_template.format(pid=pid))
     
     # Bind surplus filter changes
     surplus_pos_combo.bind("<<ComboboxSelected>>", lambda e: update_surplus_table())
+    surplus_archetype_combo.bind("<<ComboboxSelected>>", lambda e: update_surplus_table())
     
     surplus_update_btn = ttk.Button(surplus_filter_frame, text="Update", command=update_surplus_table)
     surplus_update_btn.pack(side="left", padx=10)

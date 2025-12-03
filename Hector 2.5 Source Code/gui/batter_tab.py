@@ -9,6 +9,7 @@ from .widgets import (
     get_batter_highlight_tags,
     make_debounced_callback,
     add_grouped_position_filters,  # <-- NEW: import the grouped filter!
+    bind_player_card_right_click,
 )
 from .tooltips import (
     add_search_tooltip, attach_treeview_heading_tooltips, BATTER_COL_TOOLTIPS,
@@ -201,6 +202,7 @@ def add_batter_tab(notebook, font):
     hsb.config(command=table.xview)
 
     id_map = {}
+    player_data_map = {}  # Maps iid -> player dict for right-click
 
     table.tag_configure("hover", background="#333")
     table.tag_configure("1b_to_3b", background="#384574")
@@ -217,6 +219,8 @@ def add_batter_tab(notebook, font):
 
     add_batter_tab.CURRENT_BATTERS = []
     
+    # Bind right-click for player card popup
+    bind_player_card_right_click(table, player_data_map, lambda p: (p, "batter"))
     # Import weights module to access and modify weights
     import sys
     import importlib.util
@@ -356,6 +360,7 @@ def add_batter_tab(notebook, font):
 
         table.delete(*table.get_children())
         id_map.clear()
+        player_data_map.clear()
 
         for b in get_filtered_batters():
             player_id = b.get("ID", "")
@@ -376,6 +381,7 @@ def add_batter_tab(notebook, font):
 
             iid = table.insert("", "end", values=values, tags=row_tags)
             id_map[iid] = player_id
+            player_data_map[iid] = b
 
         make_treeview_open_link_handler(table, id_map, lambda pid: player_url_template.format(pid=pid))
 
@@ -388,6 +394,7 @@ def add_batter_tab(notebook, font):
         set_table_columns("top10_total_by_pos")
         table.delete(*table.get_children())
         id_map.clear()
+        player_data_map.clear()
 
         POSITION_ORDER = ["C", "1B", "2B", "3B", "SS", "DH", "LF", "CF", "RF"]
         all_batters = get_filtered_batters()
@@ -443,6 +450,7 @@ def add_batter_tab(notebook, font):
 
                 iid = table.insert("", "end", values=values, tags=row_tags)
                 id_map[iid] = b.get("ID", "")
+                player_data_map[iid] = b
 
         make_treeview_open_link_handler(table, id_map, lambda pid: player_url_template.format(pid=pid))
         table.yview_moveto(0)
