@@ -126,6 +126,10 @@ def add_trade_builder_tab(notebook, font):
     )
     team_combo.pack(side="left", padx=5)
     
+    # Clear Selection button
+    clear_selection_btn = ttk.Button(team_selector_frame, text="🗑️ Clear Selection")
+    clear_selection_btn.pack(side="left", padx=5)
+    
     # Player List for Your Team (all players from selected team)
     player_list_frame = tk.Frame(left_panel, bg="#1e1e1e")
     player_list_frame.pack(fill="both", expand=True, padx=5, pady=5)
@@ -831,8 +835,8 @@ def add_trade_builder_tab(notebook, font):
                         match_score += 10
                 
                 elif trade_mode == TRADE_MODE_FLEECE:
-                    # Fleece mode: return players where you get significantly more value
-                    if player_value < total_offered * 1.20:
+                    # Fleece mode: return players where you get significantly more value (50%+ higher)
+                    if player_value < total_offered * 1.50:
                         continue
                     match_score = min(100, (player_value / total_offered - 1) * 100)
                 
@@ -1039,6 +1043,13 @@ def add_trade_builder_tab(notebook, font):
         else:
             park_impact_details.config(text="No significant park impact for selected players")
     
+    def clear_selected_assets():
+        """Clear only the selected assets (players you're trading away)."""
+        selected_assets.clear()
+        update_player_list()
+        update_selected_assets_display()
+        update_trade_summary()
+    
     def clear_trade():
         """Clear all trade selections."""
         selected_assets.clear()
@@ -1054,12 +1065,17 @@ def add_trade_builder_tab(notebook, font):
     # Event Bindings
     # ========================================================================
     
+    def on_team_change(event):
+        """Handle team dropdown selection change."""
+        clear_selected_assets()  # Clear selected players when team changes (also updates player list)
+    
     player_table.bind("<Button-1>", toggle_player_selection)
     results_table.bind("<Button-1>", toggle_target_selection)
     
-    team_combo.bind("<<ComboboxSelected>>", lambda e: update_player_list())
+    team_combo.bind("<<ComboboxSelected>>", on_team_change)
     search_btn.config(command=find_matching_players)
     clear_btn.config(command=clear_trade)
+    clear_selection_btn.config(command=clear_selected_assets)
     
     # Set up double-click handlers for opening player pages
     make_treeview_open_link_handler(
