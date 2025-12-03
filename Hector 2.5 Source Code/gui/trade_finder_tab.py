@@ -8,6 +8,7 @@ from .widgets import (
 from .tooltips import add_button_tooltip
 from trade_value import parse_number, parse_years_left, get_contract_status, parse_salary
 from team_parser import calculate_surplus_value, get_surplus_tier
+from player_utils import parse_star_rating
 
 player_url_template = load_player_url_template()
 
@@ -647,7 +648,7 @@ def add_trade_finder_tab(notebook, font):
                 continue
             
             surplus_tier = get_surplus_tier(surplus)
-            ovr = parse_star_rating_local(p.get("OVR", "0"))
+            ovr = parse_star_rating(p.get("OVR", "0"))
             
             players_with_surplus.append({
                 "player": p,
@@ -688,7 +689,7 @@ def add_trade_finder_tab(notebook, font):
                 continue
             
             surplus_tier = get_surplus_tier(surplus)
-            ovr = parse_star_rating_local(b.get("OVR", "0"))
+            ovr = parse_star_rating(b.get("OVR", "0"))
             
             players_with_surplus.append({
                 "player": b,
@@ -707,21 +708,6 @@ def add_trade_finder_tab(notebook, font):
         # Sort by surplus descending
         players_with_surplus.sort(key=lambda x: x["surplus"], reverse=True)
         return players_with_surplus
-    
-    def parse_star_rating_local(val):
-        """Convert star rating string to numeric value"""
-        if not val:
-            return 0.0
-        val = str(val).strip()
-        if "Stars" in val:
-            try:
-                return float(val.split()[0])
-            except (ValueError, IndexError):
-                return 0.0
-        try:
-            return float(val)
-        except ValueError:
-            return 0.0
     
     def update_surplus_table():
         """Update the surplus value table"""

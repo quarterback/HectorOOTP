@@ -128,6 +128,10 @@ EXPANSION_ARCHETYPES = {
 # Cheapskate mode constants
 CHEAPSKATE_SALARY_PENALTY_THRESHOLD = 3.0   # Salary above this gets heavy penalty
 CHEAPSKATE_SALARY_EXTREME_PENALTY = 0.01    # Weight for high salary players
+
+# Expansion mode weight multipliers
+EXPANSION_PRE_ARB_WEIGHT = 2.0              # Weight boost for pre-arbitration players
+EXPANSION_ARBITRATION_WEIGHT = 1.5          # Weight boost for arbitration players
 CHEAPSKATE_MIN_SALARY_BONUS = 4.0           # Weight boost for minimum salary
 CHEAPSKATE_OVR_FLOOR = 40                   # Minimum viable OVR
 CHEAPSKATE_OVR_CEILING = 55                 # Target OVR ceiling
@@ -524,8 +528,12 @@ class RosterBuilder:
                            "Stars-and-Scrubs", or "Competent Floor"
         
         Each call produces a different roster due to weighted randomness.
-        All options (competitive_level, salary_tier, identity, expansion_mode) 
-        are applied together multiplicatively.
+        
+        All options are applied together multiplicatively - meaning the weight
+        modifiers from each option are multiplied together. For example:
+        - "Rebuilding" applies a 3.0x weight boost for players age <= 23
+        - "Budget" applies a 0.05x penalty for players with salary >= 25M
+        - Combined, these multiply: a young, expensive player gets 3.0 * 0.05 = 0.15x
         
         When expansion_mode is not "Off", it overrides/modifies the standard
         weights to match the expansion archetype's strategy.
@@ -845,9 +853,9 @@ class RosterBuilder:
             yl_data = parse_years_left(player.get("YL", ""))
             status = yl_data.get("status", "unknown")
             if status == "pre_arb":
-                weight *= 2.0
+                weight *= EXPANSION_PRE_ARB_WEIGHT
             elif status == "arbitration":
-                weight *= 1.5
+                weight *= EXPANSION_ARBITRATION_WEIGHT
         
         # Value efficiency (WAR/$)
         if value_weight > 0.2:

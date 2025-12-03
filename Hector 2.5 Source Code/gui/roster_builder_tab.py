@@ -65,7 +65,7 @@ def add_roster_builder_tab(notebook, font):
         text="(All options combine × multiplicatively)",
         font=(font[0], font[1] - 1),
         bg="#2a2a2a",
-        fg="#888888"
+        fg="#aaaaaa"  # Higher contrast for accessibility
     ).pack(side="left", padx=(0, 10), pady=5)
     
     # Competitive Level dropdown

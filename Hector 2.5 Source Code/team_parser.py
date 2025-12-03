@@ -2,7 +2,8 @@
 # Parse team HTML data for surplus value trade finder
 
 from bs4 import BeautifulSoup
-from trade_value import parse_number
+from trade_value import parse_number, parse_salary
+from player_utils import parse_star_rating
 
 
 # Team status thresholds
@@ -259,16 +260,8 @@ def find_trade_candidates(players, teams_data, player_type="batter"):
         else:
             war = parse_number(player.get("WAR (Batter)", player.get("WAR", 0)))
         
-        # Get salary (in millions)
-        salary_raw = player.get("SLR", "0")
-        if isinstance(salary_raw, str):
-            salary_raw = salary_raw.replace("$", "").replace(",", "")
-            try:
-                salary = float(salary_raw) / 1_000_000 if float(salary_raw) > 100 else float(salary_raw)
-            except ValueError:
-                salary = 0.0
-        else:
-            salary = float(salary_raw) if salary_raw else 0.0
+        # Get salary using the existing parse_salary function
+        salary = parse_salary(player.get("SLR", 0))
         
         # Calculate surplus value
         surplus = calculate_surplus_value(war, salary)
@@ -308,15 +301,8 @@ def find_trade_candidates(players, teams_data, player_type="batter"):
         # WAR contribution (10 points max)
         trade_fit += min(10, war * 3)
         
-        # Get OVR for display
-        ovr_raw = player.get("OVR", "0")
-        if "Stars" in str(ovr_raw):
-            ovr = float(str(ovr_raw).split()[0])
-        else:
-            try:
-                ovr = float(ovr_raw)
-            except (ValueError, TypeError):
-                ovr = 0.0
+        # Get OVR for display using shared utility
+        ovr = parse_star_rating(player.get("OVR", "0"))
         
         candidates.append({
             "player": player,
