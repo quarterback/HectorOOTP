@@ -23,9 +23,13 @@ from pitchers import calculate_park_adjusted_pitcher_score, get_pitcher_park_imp
 player_url_template = load_player_url_template()
 
 # Trade mode constants
+# Trade mode constants
 TRADE_MODE_FAIR = "fair"
 TRADE_MODE_BUY_LOW = "buy_low"
 TRADE_MODE_FLEECE = "fleece"
+
+# Search results limit
+MAX_SEARCH_RESULTS = 50
 
 # Trade mode descriptions
 TRADE_MODES = {
@@ -857,7 +861,7 @@ def add_trade_builder_tab(notebook, font):
         matching_players.sort(key=lambda x: x["match_score"], reverse=True)
         
         # Display results
-        for mp in matching_players[:50]:  # Limit to 50 results
+        for mp in matching_players[:MAX_SEARCH_RESULTS]:
             player = mp["player"]
             
             # Check if in selected targets
