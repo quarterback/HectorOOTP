@@ -4,6 +4,7 @@ from .style import on_treeview_motion, on_leave
 from .widgets import (
     make_treeview_open_link_handler,
     load_player_url_template,
+    bind_player_card_right_click,
 )
 
 player_url_template = load_player_url_template()
@@ -21,6 +22,8 @@ def add_trade_tab(notebook, font):
     all_batters = []
     team_a_id_map = {}
     team_b_id_map = {}
+    team_a_player_data_map = {}  # Maps iid -> player dict for right-click
+    team_b_player_data_map = {}  # Maps iid -> player dict for right-click
     
     # Normalization values
     max_pitcher_score = 0.0
@@ -340,8 +343,8 @@ def add_trade_tab(notebook, font):
                 pick.update(new_pick)
             
             # Update displays
-            update_team_table(team_a_table, team_a_players, team_a_id_map, team_a_picks)
-            update_team_table(team_b_table, team_b_players, team_b_id_map, team_b_picks)
+            update_team_table(team_a_table, team_a_players, team_a_id_map, team_a_player_data_map, team_a_picks)
+            update_team_table(team_b_table, team_b_players, team_b_id_map, team_b_player_data_map, team_b_picks)
             update_summaries()
             
             messagebox.showinfo("Success", "League settings updated. Draft pick values have been recalculated.")
@@ -433,6 +436,15 @@ def add_trade_tab(notebook, font):
     team_a_table.bind("<Motion>", on_treeview_motion)
     team_a_table.bind("<Leave>", on_leave)
     
+    # Define player type detection function
+    PITCHER_POSITIONS = {"SP", "RP", "CL", "P"}
+    def get_player_type(player):
+        pos = player.get("POS", "").upper()
+        return "pitcher" if pos in PITCHER_POSITIONS else "batter"
+    
+    # Bind right-click for player card popup
+    bind_player_card_right_click(team_a_table, team_a_player_data_map, lambda p: (p, get_player_type(p)))
+    
     # Team A Summary
     team_a_summary_frame = tk.Frame(team_a_frame, bg="#1e1e1e")
     team_a_summary_frame.pack(fill="x", padx=5, pady=5)
@@ -522,6 +534,9 @@ def add_trade_tab(notebook, font):
     team_b_table._prev_hover = None
     team_b_table.bind("<Motion>", on_treeview_motion)
     team_b_table.bind("<Leave>", on_leave)
+    
+    # Bind right-click for player card popup
+    bind_player_card_right_click(team_b_table, team_b_player_data_map, lambda p: (p, get_player_type(p)))
     
     # Team B Summary
     team_b_summary_frame = tk.Frame(team_b_frame, bg="#1e1e1e")
@@ -1130,9 +1145,9 @@ def add_trade_tab(notebook, font):
                 
                 # Update display
                 if team_name == "Team A":
-                    update_team_table(team_a_table, team_a_players, team_a_id_map, team_a_picks)
+                    update_team_table(team_a_table, team_a_players, team_a_id_map, team_a_player_data_map, team_a_picks)
                 else:
-                    update_team_table(team_b_table, team_b_players, team_b_id_map, team_b_picks)
+                    update_team_table(team_b_table, team_b_players, team_b_id_map, team_b_player_data_map, team_b_picks)
                 update_summaries()
             except ValueError:
                 messagebox.showerror("Error", "Please enter valid numbers")
@@ -1203,10 +1218,11 @@ def add_trade_tab(notebook, font):
             "team_total": round(team_total, 2)
         }
     
-    def update_team_table(table, players, id_map, picks=None):
+    def update_team_table(table, players, id_map, player_data_map, picks=None):
         """Update a team's table display"""
         table.delete(*table.get_children())
         id_map.clear()
+        player_data_map.clear()
         
         # Display players
         for player in players:
@@ -1243,6 +1259,7 @@ def add_trade_tab(notebook, font):
             player_id = player.get("ID", "")
             if player_id:
                 id_map[iid] = player_id
+            player_data_map[iid] = player
         
         # Display draft picks
         if picks:
@@ -1403,15 +1420,15 @@ def add_trade_tab(notebook, font):
         
         # Update display
         if team_table == team_a_table:
-            update_team_table(team_table, team_players, team_id_map, team_a_picks)
+            update_team_table(team_table, team_players, team_id_map, team_a_player_data_map, team_a_picks)
         else:
-            update_team_table(team_table, team_players, team_id_map, team_b_picks)
+            update_team_table(team_table, team_players, team_id_map, team_b_player_data_map, team_b_picks)
         update_summaries()
         
         # Clear entry
         entry_var.set("")
     
-    def remove_player_from_team(table, team_players, team_id_map, team_picks=None):
+    def remove_player_from_team(table, team_players, team_id_map, team_player_data_map, team_picks=None):
         """Remove selected player or draft pick from team"""
         selection = table.selection()
         if not selection:
@@ -1438,12 +1455,15 @@ def add_trade_tab(notebook, font):
                     # Remove player
                     team_players[:] = [p for p in team_players if p.get("ID") != item_id_str]
                 table.delete(item_id)
-                del team_id_map[item_id]
+                if item_id in team_id_map:
+                    del team_id_map[item_id]
+                if item_id in team_player_data_map:
+                    del team_player_data_map[item_id]
         
         if table == team_a_table:
-            update_team_table(table, team_players, team_id_map, team_a_picks)
+            update_team_table(table, team_players, team_id_map, team_a_player_data_map, team_a_picks)
         else:
-            update_team_table(table, team_players, team_id_map, team_b_picks)
+            update_team_table(table, team_players, team_id_map, team_b_player_data_map, team_b_picks)
         update_summaries()
     
     # Set up double-click handlers for both tables
@@ -1486,13 +1506,13 @@ def add_trade_tab(notebook, font):
     # Add remove buttons
     team_a_remove_btn = ttk.Button(team_a_entry_frame, text="Remove Selected", 
                                    command=lambda: remove_player_from_team(
-                                       team_a_table, team_a_players, team_a_id_map, team_a_picks
+                                       team_a_table, team_a_players, team_a_id_map, team_a_player_data_map, team_a_picks
                                    ))
     team_a_remove_btn.pack(side="left", padx=(5, 0))
     
     team_b_remove_btn = ttk.Button(team_b_entry_frame, text="Remove Selected",
                                    command=lambda: remove_player_from_team(
-                                       team_b_table, team_b_players, team_b_id_map, team_b_picks
+                                       team_b_table, team_b_players, team_b_id_map, team_b_player_data_map, team_b_picks
                                    ))
     team_b_remove_btn.pack(side="left", padx=(5, 0))
     
