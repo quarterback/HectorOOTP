@@ -25,8 +25,8 @@ def add_auto_contract_tab(notebook, font):
     # Data storage
     free_agents = []
     all_players = []  # For market calculation
-    market_dollar_per_war = [8.0]  # Mutable reference
-    selected_free_agent = [None]  # Currently selected player
+    market_dollar_per_war = [8.0]  # Mutable reference for closure (consistent with codebase pattern)
+    selected_free_agent = [None]  # Mutable reference for closure (consistent with codebase pattern)
     
     # Main container
     main_container = tk.Frame(auto_contract_frame, bg=DARK_BG)

@@ -327,7 +327,6 @@ def build_gui():
             roster_builder_tab = add_roster_builder_tab(notebook, font)
             advanced_stats_tab = add_advanced_stats_tab(notebook, font)
             auto_contract_tab = add_auto_contract_tab(notebook, font)
-            auto_contract_tab = add_auto_contract_tab(notebook, font)
             root._gui_vars = {
                 "summary_left_var": summary_left_var,
                 "summary_right_var": summary_right_var,
