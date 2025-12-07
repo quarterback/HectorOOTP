@@ -29,7 +29,7 @@ from .widgets import (
     create_title_label, create_summary_widgets, create_control_frame, update_summary_widgets,
     validate_fields, detect_wrong_import, show_loading_bar, set_app_icon
 )
-from bs4 import BeautifulSoup
+from html_parser import parse_players_from_html, split_players_by_type, PITCHER_POSITIONS, BATTER_POSITIONS
 
 REQUIRED_PITCHER_FIELDS = [
     "Name", "ORG", "POS", "Age", "T", "Prone", "SctAcc",
@@ -48,9 +48,6 @@ REQUIRED_BATTER_FIELDS = [
 ]
 
 
-
-PITCHER_POSITIONS = {"P", "SP", "RP", "CL"}
-BATTER_POSITIONS = {"C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"}
 
 NEON_GREEN = "#29ff9e"
 DARK_BG = "#2d2d2d"
@@ -79,65 +76,6 @@ def reload_weights():
     global section_weights, batter_section_weights
     section_weights = pitcher_weights_module.section_weights
     batter_section_weights = batter_weights_module.section_weights
-
-def parse_players_from_html(html_path):
-    # Accept either a Path or string
-    with open(html_path, 'r', encoding='utf-8') as f:
-        soup = BeautifulSoup(f, "html.parser")
-    table = soup.find("table", class_="data")
-    if not table:
-        raise ValueError(f"No table with class 'data' found in {html_path}")
-    # Header row:
-    thead = table.find("thead")
-    if thead:
-        header_row = thead.find("tr")
-    else:
-        header_row = table.find("tr")
-    if not header_row:
-        raise ValueError(f"No header row found in the table in {html_path}.")
-    headers = [th.get_text(strip=True) for th in header_row.find_all("th")]
-    # Handle duplicate header names by checking context
-    # WAR appears twice: once for batters (after wRC+) and once for pitchers (after ERA+)
-    processed_headers = []
-    for i, header in enumerate(headers):
-        if header == "WAR":
-            # Check previous headers to determine which WAR this is
-            if i > 0 and headers[i-1] == "wRC+":
-                processed_headers.append("WAR (Batter)")
-            elif i > 0 and headers[i-1] == "ERA+":
-                processed_headers.append("WAR (Pitcher)")
-            else:
-                processed_headers.append(header)
-        else:
-            processed_headers.append(header)
-    
-    # Data rows:
-    tbody = table.find("tbody")
-    if tbody:
-        rows = tbody.find_all("tr")
-    else:
-        rows = table.find_all("tr")[1:] # skip header row
-    players = []
-    for row in rows:
-        cells = row.find_all("td")
-        if len(cells) != len(processed_headers):
-            continue  # skip junk
-        player_data = {processed_headers[i]: cells[i].get_text(strip=True) for i in range(len(processed_headers))}
-        players.append(player_data)
-    return players
-
-def split_players_by_type(players):
-    pitchers = []
-    batters = []
-    for player in players:
-        pos = player.get("POS", "").strip().upper()
-        # Split by most comprehensive logic:
-        if pos in PITCHER_POSITIONS:
-            pitchers.append(player)
-        elif pos in BATTER_POSITIONS:
-            batters.append(player)
-        # optionally, add fallback here for secondary detection by columns if needed.
-    return pitchers, batters
 
 def build_gui():
     root = tk.Tk()
