@@ -10,7 +10,8 @@ from auto_contract import (
     parse_player_from_dict,
     calculate_market_dollar_per_war,
     calculate_ovr_percentile,
-    war_from_percentile
+    war_from_percentile,
+    should_use_ovr_percentile_mode
 )
 from html_parser import parse_players_from_html
 from player_utils import parse_star_rating, get_war
@@ -480,11 +481,9 @@ def add_auto_contract_tab(notebook, font):
         
         ovr = player.get("OVR", "-")
         
-        # Check if player has no WAR data but has OVR - show percentile info
-        war_numeric = get_war(player, player_type)
-        ovr_numeric = parse_star_rating(ovr)
-        
-        if war_numeric == 0 and ovr_numeric > 0 and free_agents:
+        # Check if player should use OVR-percentile mode - show percentile info
+        if should_use_ovr_percentile_mode(player, player_type, free_agents):
+            ovr_numeric = parse_star_rating(ovr)
             # Calculate OVR percentile
             percentile = calculate_ovr_percentile(ovr_numeric, free_agents)
             projected_war = war_from_percentile(percentile)
@@ -585,10 +584,23 @@ def add_auto_contract_tab(notebook, font):
         
         try:
             league_scale = float(league_scale_var.get())
-            # Clamp to valid range
+            # Clamp to valid range and warn if out of bounds
+            original_scale = league_scale
             league_scale = max(0.1, min(3.0, league_scale))
+            if league_scale != original_scale:
+                messagebox.showwarning(
+                    "Invalid Scale",
+                    f"League Scale Multiplier must be between 0.1 and 3.0.\n\n"
+                    f"Your value ({original_scale}) has been adjusted to {league_scale}."
+                )
+                league_scale_var.set(f"{league_scale:.1f}")
         except ValueError:
             league_scale = 1.0
+            messagebox.showwarning(
+                "Invalid Scale",
+                "League Scale Multiplier must be a number.\n\nDefaulting to 1.0."
+            )
+            league_scale_var.set("1.0")
         
         # Get selected archetypes
         selected_archetypes = [
