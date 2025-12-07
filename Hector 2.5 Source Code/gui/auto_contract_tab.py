@@ -10,7 +10,7 @@ from auto_contract import (
     parse_player_from_dict,
     calculate_market_dollar_per_war
 )
-from gui.core import parse_players_from_html
+from html_parser import parse_players_from_html
 
 # Theme colors
 DARK_BG = "#2d2d2d"
