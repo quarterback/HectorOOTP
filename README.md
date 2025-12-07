@@ -4,10 +4,6 @@
 
 **Advanced analytics and roster management for Out of the Park Baseball (OOTP)**
 
-Rosterlytics is a powerful desktop analytics tool for OOTP leagues, providing stats-based player evaluation, trade analysis, contract optimization, and roster building tools. Built for both casual GMs and competitive online leagues, it transforms your exported HTML data into actionable insights with an intuitive dark-mode interface.
-
----
-
 ## What is Rosterlytics?
 
 Rosterlytics is a feature-rich fork of the original <a href="https://github.com/zab1996/HectorOOTP">Hector OOTP Analyzer</a> by zab1996, significantly enhanced with stats-based scoring, percentile rankings, advanced trade tools, contract analysis, and comprehensive roster building features. While it maintains the core player evaluation engine, Rosterlytics adds an extensive suite of new capabilities that help you discover hidden gems, optimize your roster, and make smarter trades.
