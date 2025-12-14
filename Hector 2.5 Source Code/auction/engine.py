@@ -45,14 +45,18 @@ class AuctionResult:
     num_bids: int
     starting_price: float
     bid_history: List[Bid] = field(default_factory=list)
+    player_id: str = ''
+    team_id: str = ''
+    order: int = 0
 
 
 class AuctionEngine:
     """Core auction engine managing bidding flow"""
     
-    def __init__(self, budget_manager, ai_bidder_pool):
+    def __init__(self, budget_manager, ai_bidder_pool, team_id_map: Optional[Dict[str, str]] = None):
         self.budget_manager = budget_manager
         self.ai_bidder_pool = ai_bidder_pool
+        self.team_id_map = team_id_map or {}  # Team Name → Team ID mapping
         
         self.state = AuctionState.SETUP
         self.players: List[Dict] = []
@@ -195,6 +199,10 @@ class AuctionEngine:
         starting_price = self.starting_prices.get(player_name, 1.0)
         
         if self.current_high_bidder:
+            # Extract player_id and team_id
+            player_id = self.current_player.get('Player ID', '')
+            team_id = self.team_id_map.get(self.current_high_bidder, '')
+            
             # Player sold
             result = AuctionResult(
                 player=self.current_player,
@@ -202,7 +210,10 @@ class AuctionEngine:
                 final_price=self.current_price,
                 num_bids=len(self.bid_history),
                 starting_price=starting_price,
-                bid_history=self.bid_history.copy()
+                bid_history=self.bid_history.copy(),
+                player_id=player_id,
+                team_id=team_id,
+                order=len(self.results) + 1  # Auction sequence number
             )
             
             # Record acquisition in budget manager

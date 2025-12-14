@@ -31,6 +31,29 @@ def import_free_agents_csv(csv_path: str) -> List[Dict]:
     return players
 
 
+def import_draft_csv(csv_path: str) -> Dict[str, str]:
+    """
+    Import draft order CSV to extract Team Name → Team ID mapping.
+    
+    Args:
+        csv_path: Path to the draft.csv file
+        
+    Returns:
+        Dictionary mapping Team Name to Team ID
+    """
+    team_id_map = {}
+    
+    with open(csv_path, 'r', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            team_name = row.get('Team Name', '').strip()
+            team_id = row.get('Team ID', '').strip()
+            if team_name and team_id:
+                team_id_map[team_name] = team_id
+    
+    return team_id_map
+
+
 def export_auction_results_csv(results: List[Dict], output_path: str, format_type: str = 'ootp'):
     """
     Export auction results to CSV for OOTP import.
@@ -51,30 +74,35 @@ def export_auction_results_csv(results: List[Dict], output_path: str, format_typ
 
 def _export_ootp_format(results: List[Dict], output_path: str):
     """
-    Export in OOTP-compatible format for importing back into game.
-    Format: Player Name, Team, Years, AAV (Annual Average Value)
+    Export in OOTP draft-compatible format for importing back into game.
+    Format: Round, Supplemental, Pick, Team Name, Team ID, Player ID
+    
+    Results should be sorted by auction order before export.
     """
-    fieldnames = ['Name', 'Team', 'Years', 'AAV']
+    fieldnames = ['Round', 'Supplemental', 'Pick', 'Team Name', 'Team ID', 'Player ID']
     
     with open(output_path, 'w', encoding='utf-8', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         
-        for result in results:
+        for idx, result in enumerate(results, start=1):
             player = result['player']
-            team = result['team']
-            price = result['price']
+            team_name = result.get('team_name', result.get('team', ''))
+            team_id = result.get('team_id', '')
+            player_id = result.get('player_id', player.get('Player ID', ''))
             
-            # Calculate contract years based on age
-            age = _parse_age(player.get('Age', '25'))
-            years = _calculate_contract_years(age, price)
-            aav = price  # In auction system, price is per year
+            # Calculate round and pick (can use simple scheme: 12 picks per round)
+            # Or just use Round 1 for everything as mentioned in requirements
+            round_num = ((idx - 1) // 12) + 1  # 12 picks per round
+            pick_num = idx
             
             writer.writerow({
-                'Name': player.get('Name', ''),
-                'Team': team,
-                'Years': years,
-                'AAV': f"${aav:.2f}M"
+                'Round': round_num,
+                'Supplemental': 0,
+                'Pick': pick_num,
+                'Team Name': team_name,
+                'Team ID': team_id,
+                'Player ID': player_id
             })
 
 
@@ -155,6 +183,33 @@ def validate_csv_format(csv_path: str) -> Tuple[bool, Optional[str], List[str]]:
         (is_valid, error_message, available_fields)
     """
     required_fields = {'Name', 'POS', 'Age'}
+    
+    try:
+        with open(csv_path, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            fieldnames = [field.strip() for field in reader.fieldnames] if reader.fieldnames else []
+            
+            if not fieldnames:
+                return False, "CSV file has no headers", []
+            
+            missing_fields = required_fields - set(fieldnames)
+            if missing_fields:
+                return False, f"Missing required fields: {', '.join(missing_fields)}", fieldnames
+            
+            return True, None, fieldnames
+            
+    except Exception as e:
+        return False, f"Error reading CSV: {str(e)}", []
+
+
+def validate_draft_csv_format(csv_path: str) -> Tuple[bool, Optional[str], List[str]]:
+    """
+    Validate that draft CSV has required fields for team mapping.
+    
+    Returns:
+        (is_valid, error_message, available_fields)
+    """
+    required_fields = {'Team Name', 'Team ID'}
     
     try:
         with open(csv_path, 'r', encoding='utf-8-sig') as f:

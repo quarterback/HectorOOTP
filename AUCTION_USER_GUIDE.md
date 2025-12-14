@@ -8,31 +8,47 @@ The Auction System allows you to run IPL-style free agency auctions for OOTP pla
 
 ### 1. Prepare Your Data
 
-First, export your free agents from OOTP:
+First, export both required CSV files from OOTP:
 
+#### Export Draft Pool (draft_eligible_players.csv)
 1. In OOTP, navigate to **Free Agents** or the players you want to auction
 2. Create a custom view that includes at least these columns:
+   - **Player ID** (Required - for OOTP import)
    - **Name** (Required)
    - **POS** (Required) 
    - **Age** (Required)
    - **OVR**, **POT** (Recommended)
    - **Ratings**: STU, MOV, CON for pitchers; CON, POW, EYE for batters
    - **Stats**: WAR, ERA+ for pitchers; WAR, wRC+ for batters
-   - **ORG** or **Team** (for team identification)
 
 3. Export the view as CSV (File → Export → CSV)
-4. Save as `free_agents.csv`
+4. Save as `draft_eligible_players.csv`
+
+#### Export Draft Order (draft.csv)
+1. In OOTP, navigate to **League → Draft** or use the draft setup screen
+2. Export the draft order which includes:
+   - **Round** (Round number)
+   - **Supplemental** (0 or 1)
+   - **Pick** (Pick number)
+   - **Team Name** (Full team name)
+   - **Team ID** (Team's unique ID in OOTP)
+   - **Player ID** (Initially 0, will be filled by auction results)
+
+3. Export as CSV (File → Export → CSV)
+4. Save as `draft.csv`
 
 ### 2. Launch the Auction
 
 1. Open Rosterlytics and navigate to the **Auction** tab
-2. Click **📁 Load Free Agents CSV** and select your exported CSV file
-3. The system will automatically detect teams and set default budgets ($100M per team)
+2. Click **📁 Load Free Agents CSV** and select your `draft_eligible_players.csv` file
+3. Click **📋 Load Draft CSV** and select your `draft.csv` file
+4. The system will extract team names and IDs, setting default budgets ($100M per team)
 
 ### 3. Configure Budgets
 
 1. Click **💰 Configure Budgets** to customize team budgets
-2. You can:
+2. You'll see each team displayed as: "Team Name (Team ID)"
+3. You can:
    - Set all teams to the same budget using "Set all teams to" field
    - Customize individual team budgets
    - Default settings: $100M per team, 75% minimum spend, 18-25 player roster size
@@ -82,17 +98,24 @@ First, export your free agents from OOTP:
    - Average price per player
 
 2. Click **📤 Export Results to CSV** to save auction results
-3. The exported CSV is formatted for OOTP import with:
-   - Player Name
-   - Winning Team
-   - Contract Years (age-based)
-   - Annual Average Value (AAV)
+3. Save the file as `draft_results.csv`
+4. The exported CSV is formatted for OOTP draft import with:
+   - **Round** - Round number (chronological auction order)
+   - **Supplemental** - Always 0
+   - **Pick** - Pick number (1st player sold = Pick 1, 2nd = Pick 2, etc.)
+   - **Team Name** - Winning team name
+   - **Team ID** - Team's OOTP ID (from draft.csv)
+   - **Player ID** - Player's OOTP ID (from draft_eligible_players.csv)
 
 ### 8. Import to OOTP
 
-1. In OOTP, go to the import screen for free agent signings
-2. Select your exported `auction_results.csv`
-3. OOTP will process the signings based on the auction results
+1. **Rename the file**: Change `draft_results.csv` to `draft.csv`
+2. **Copy to OOTP folder**: Place the file in your OOTP `import_export` folder
+3. **In OOTP**: Navigate to **League → Draft → Import Draft Results**
+4. Select your renamed `draft.csv` file
+5. **Players assigned**: OOTP will assign each player to their winning team!
+
+**Note**: This system cleverly uses OOTP's draft import mechanism to bulk-assign free agents. The "draft order" is simply the chronological auction order (1st sold = R1P1, 2nd sold = R1P2, etc.). OOTP doesn't care about round/pick semantics for this use case - it just assigns Player ID to Team ID.
 
 ## Features in Detail
 
@@ -263,10 +286,16 @@ config = BudgetConfig.load('my_league_budgets.json')
 
 ### Export Formats
 
-Two export formats are available:
+The auction system now exports in OOTP draft-compatible format:
 
-1. **OOTP Format** (default): Player Name, Team, Years, AAV - ready for OOTP import
-2. **Detailed Format**: All player data plus auction price and winning team
+**OOTP Draft Format** (default):
+- Round, Supplemental, Pick, Team Name, Team ID, Player ID
+- Ready for OOTP draft import
+- Assigns players chronologically based on auction order
+
+**Detailed Format** (optional):
+- All player data plus auction price and winning team
+- Use for analysis or record-keeping
 
 Change format in code:
 ```python
@@ -287,18 +316,22 @@ The auction system integrates seamlessly with Portal's existing systems:
 **Typical Commissioner-Mode Auction:**
 
 1. **Pre-Season**: 
-   - Export all free agents from OOTP to CSV
+   - In OOTP: Export `draft_eligible_players.csv` (free agents with Player ID column)
+   - In OOTP: Export `draft.csv` (draft order with Team Names and Team IDs)
    - Set league-wide budget cap in Rosterlytics
 
 2. **Auction Day**:
+   - Load both CSV files in Rosterlytics Auction Tab
    - Assign all teams as AI with varied strategies
    - Run full AI auction (click "Process AI Bids" repeatedly)
    - Review results
 
 3. **Post-Auction**:
-   - Export results CSV
-   - Import back into OOTP
-   - Players are signed to their new teams
+   - Export results as `draft_results.csv`
+   - Rename to `draft.csv`
+   - Copy to OOTP import_export folder
+   - In OOTP: Import draft.csv
+   - Players are assigned to their winning teams!
 
 **Typical Mixed Human/AI Auction:**
 

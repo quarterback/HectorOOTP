@@ -13,7 +13,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from auction.engine import AuctionEngine, AuctionState, BidType
 from auction.budget import BudgetManager, BudgetConfig
-from auction.csv_handler import import_free_agents_csv, export_auction_results_csv, validate_csv_format
+from auction.csv_handler import (
+    import_free_agents_csv, 
+    import_draft_csv, 
+    export_auction_results_csv, 
+    validate_csv_format,
+    validate_draft_csv_format
+)
 from auction.valuations import calculate_all_valuations, get_suggested_starting_price, format_price
 from auction.bidding_ai import AIBidderPool, BiddingStrategy
 
@@ -41,6 +47,8 @@ def add_auction_tab(notebook, font, section_weights, batter_section_weights):
         human_teams = set()
         ai_teams = {}
         current_bid_amount = tk.DoubleVar(value=0.0)
+        team_id_map = {}  # Team Name → Team ID mapping from draft.csv
+        draft_csv_loaded = False
         
     data = AuctionData()
     
@@ -60,11 +68,22 @@ def add_auction_tab(notebook, font, section_weights, batter_section_weights):
     csv_status_label = tk.Label(row1, text="No CSV loaded", bg=DARK_BG, fg="#888", font=font)
     csv_status_label.pack(side="left", padx=10)
     
-    configure_budget_btn = ttk.Button(row1, text="💰 Configure Budgets",
+    load_draft_btn = ttk.Button(row1, text="📋 Load Draft CSV", 
+                                 command=lambda: load_draft_csv(data, font))
+    load_draft_btn.pack(side="left", padx=5)
+    
+    draft_status_label = tk.Label(row1, text="No draft CSV loaded", bg=DARK_BG, fg="#888", font=font)
+    draft_status_label.pack(side="left", padx=10)
+    
+    # Row 1b: Budget Config (moved to separate row for space)
+    row1b = tk.Frame(setup_frame, bg=DARK_BG)
+    row1b.pack(fill="x", pady=5)
+    
+    configure_budget_btn = ttk.Button(row1b, text="💰 Configure Budgets",
                                        command=lambda: open_budget_config_dialog(data, font))
     configure_budget_btn.pack(side="left", padx=5)
     
-    budget_status_label = tk.Label(row1, text="Budgets not configured", bg=DARK_BG, fg="#888", font=font)
+    budget_status_label = tk.Label(row1b, text="Budgets not configured", bg=DARK_BG, fg="#888", font=font)
     budget_status_label.pack(side="left", padx=10)
     
     # Row 2: Team Assignment
@@ -98,6 +117,7 @@ def add_auction_tab(notebook, font, section_weights, batter_section_weights):
     
     # Store UI elements for updates
     data.csv_status_label = csv_status_label
+    data.draft_status_label = draft_status_label
     data.budget_status_label = budget_status_label
     data.team_status_label = team_status_label
     data.start_auction_btn = start_auction_btn
@@ -116,10 +136,11 @@ def show_auction_instructions(parent, font):
 Welcome to the Auction System!
 
 To get started:
-1. Load a Free Agents CSV file (export from OOTP)
-2. Configure team budgets
-3. Assign teams as Human or AI controlled
-4. Start the auction!
+1. Load a Free Agents CSV file (draft_eligible_players.csv from OOTP)
+2. Load a Draft CSV file (draft.csv from OOTP for team IDs)
+3. Configure team budgets
+4. Assign teams as Human or AI controlled
+5. Start the auction!
 
 The auction will run player-by-player with real-time bidding.
     """, bg=DARK_BG, fg="#d4d4d4", font=font, justify="left")
@@ -129,7 +150,7 @@ The auction will run player-by-player with real-time bidding.
 def load_free_agents_csv(data, font):
     """Load free agents from CSV"""
     filepath = filedialog.askopenfilename(
-        title="Select Free Agents CSV",
+        title="Select Free Agents CSV (draft_eligible_players.csv)",
         filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
     )
     
@@ -147,17 +168,51 @@ def load_free_agents_csv(data, font):
         data.players = import_free_agents_csv(filepath)
         data.csv_status_label.config(text=f"✓ Loaded {len(data.players)} players", fg=NEON_GREEN)
         
-        # Extract unique teams
-        teams = sorted(set(p.get('ORG', p.get('Team', 'FA')) for p in data.players))
+        # If draft CSV not loaded yet, extract teams from player data for now
+        if not data.draft_csv_loaded:
+            teams = sorted(set(p.get('ORG', p.get('Team', 'FA')) for p in data.players))
+            
+            # Create default budget config
+            data.budget_config = BudgetConfig.default_config(teams, budget_per_team=100.0)
+            data.budget_status_label.config(text=f"✓ Default budgets: ${100.0}M per team", fg=NEON_GREEN)
         
-        # Create default budget config
+        check_ready_to_start(data)
+        
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to load CSV:\n{str(e)}")
+
+
+def load_draft_csv(data, font):
+    """Load draft CSV to get team IDs"""
+    filepath = filedialog.askopenfilename(
+        title="Select Draft CSV (draft.csv)",
+        filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+    )
+    
+    if not filepath:
+        return
+    
+    # Validate CSV
+    valid, error, fields = validate_draft_csv_format(filepath)
+    if not valid:
+        messagebox.showerror("Invalid CSV", f"CSV validation failed:\n{error}")
+        return
+    
+    # Load team ID mapping
+    try:
+        data.team_id_map = import_draft_csv(filepath)
+        data.draft_csv_loaded = True
+        data.draft_status_label.config(text=f"✓ Loaded {len(data.team_id_map)} teams", fg=NEON_GREEN)
+        
+        # Update budget config with teams from draft CSV
+        teams = sorted(data.team_id_map.keys())
         data.budget_config = BudgetConfig.default_config(teams, budget_per_team=100.0)
         data.budget_status_label.config(text=f"✓ Default budgets: ${100.0}M per team", fg=NEON_GREEN)
         
         check_ready_to_start(data)
         
     except Exception as e:
-        messagebox.showerror("Error", f"Failed to load CSV:\n{str(e)}")
+        messagebox.showerror("Error", f"Failed to load draft CSV:\n{str(e)}")
 
 
 def open_budget_config_dialog(data, font):
@@ -212,8 +267,12 @@ def open_budget_config_dialog(data, font):
         team_frame = tk.Frame(scrollable_frame, bg=DARK_BG)
         team_frame.pack(fill="x", pady=2)
         
-        tk.Label(team_frame, text=f"{team}:", bg=DARK_BG, fg="#d4d4d4", 
-                font=font, width=10, anchor="w").pack(side="left")
+        # Show Team ID if available
+        team_id = data.team_id_map.get(team, '')
+        team_display = f"{team} ({team_id})" if team_id else team
+        
+        tk.Label(team_frame, text=f"{team_display}:", bg=DARK_BG, fg="#d4d4d4", 
+                font=font, width=25, anchor="w").pack(side="left")
         
         var = tk.DoubleVar(value=data.budget_config.team_budgets[team])
         entry = ttk.Entry(team_frame, textvariable=var, width=10)
@@ -371,8 +430,8 @@ def start_auction(data, display_frame, font, section_weights, batter_section_wei
     for team, strategy in data.ai_teams.items():
         data.ai_bidder_pool.add_bidder(team, strategy, data.budget_manager, data.valuations)
     
-    # Initialize auction engine
-    data.auction_engine = AuctionEngine(data.budget_manager, data.ai_bidder_pool)
+    # Initialize auction engine with team_id_map
+    data.auction_engine = AuctionEngine(data.budget_manager, data.ai_bidder_pool, data.team_id_map)
     data.auction_engine.initialize_auction(data.players, starting_prices)
     
     # Set up callbacks
@@ -692,21 +751,28 @@ def export_results(data):
     
     summary = data.auction_engine.get_results_summary()
     
-    # Prepare results for export
+    # Prepare results for export with new format
     results = []
     for result in summary['results']:
         results.append({
             'player': result.player,
             'team': result.winning_team,
-            'price': result.final_price
+            'team_name': result.winning_team,  # For OOTP format
+            'team_id': result.team_id,
+            'player_id': result.player_id,
+            'price': result.final_price,
+            'order': result.order
         })
+    
+    # Sort by order to ensure chronological output
+    results.sort(key=lambda x: x.get('order', 0))
     
     # Ask for file location
     filepath = filedialog.asksaveasfilename(
-        title="Export Auction Results",
+        title="Export Auction Results (rename to draft.csv before importing to OOTP)",
         defaultextension=".csv",
         filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-        initialfile="auction_results.csv"
+        initialfile="draft_results.csv"
     )
     
     if not filepath:
@@ -714,6 +780,16 @@ def export_results(data):
     
     try:
         export_auction_results_csv(results, filepath, format_type='ootp')
-        messagebox.showinfo("Success", f"Results exported to:\n{filepath}")
+        
+        # Show success message with import instructions
+        messagebox.showinfo(
+            "Export Successful",
+            f"Results exported to:\n{filepath}\n\n"
+            "📋 Next Steps:\n"
+            "1. Rename this file to 'draft.csv'\n"
+            "2. Copy it to your OOTP import_export folder\n"
+            "3. In OOTP, import the draft.csv file\n"
+            "4. Players will be assigned to their winning teams!"
+        )
     except Exception as e:
         messagebox.showerror("Export Failed", f"Failed to export results:\n{str(e)}")
