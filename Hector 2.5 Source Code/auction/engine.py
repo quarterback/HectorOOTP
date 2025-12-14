@@ -7,10 +7,14 @@ from enum import Enum
 from typing import Dict, List, Optional, Callable, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+import time
 
 # Constants
 DEFAULT_MIN_BID_INCREMENT = 0.5  # $0.5M minimum increment
 DEFAULT_AUTO_ADVANCE_DELAY = 3.0  # Seconds to wait before auto-advancing
+DEFAULT_TIMER_DURATION = 60  # Default timer duration in seconds
+MIN_TIMER_DURATION = 30  # Minimum timer duration
+MAX_TIMER_DURATION = 120  # Maximum timer duration
 
 
 class AuctionState(Enum):
@@ -74,10 +78,18 @@ class AuctionEngine:
         self.min_bid_increment: float = DEFAULT_MIN_BID_INCREMENT
         self.auto_advance_delay: float = DEFAULT_AUTO_ADVANCE_DELAY
         
+        # Timer parameters
+        self.timer_enabled: bool = False
+        self.timer_duration: int = DEFAULT_TIMER_DURATION  # Total duration in seconds
+        self.timer_remaining: float = 0.0  # Time remaining for current player
+        self.timer_active: bool = False  # Whether timer is currently counting down
+        self.timer_start_time: Optional[float] = None  # When timer was started/resumed
+        
         # Callbacks for UI updates
         self.on_bid_callback: Optional[Callable] = None
         self.on_player_sold_callback: Optional[Callable] = None
         self.on_auction_complete_callback: Optional[Callable] = None
+        self.on_timer_update_callback: Optional[Callable] = None  # Called when timer updates
     
     def initialize_auction(self, players: List[Dict], starting_prices: Dict[str, float]):
         """
@@ -108,6 +120,7 @@ class AuctionEngine:
             # Auction complete
             self.state = AuctionState.COMPLETED
             self.current_player = None
+            self._stop_timer()
             if self.on_auction_complete_callback:
                 self.on_auction_complete_callback()
             return
@@ -118,6 +131,11 @@ class AuctionEngine:
         self.current_high_bidder = None
         self.current_bid_type = None
         self.bid_history = []
+        
+        # Reset and start timer if enabled
+        if self.timer_enabled:
+            self._reset_timer()
+            self._start_timer()
     
     def place_bid(self, team: str, amount: float, bid_type: BidType = BidType.HUMAN) -> Tuple[bool, Optional[str]]:
         """
@@ -256,11 +274,13 @@ class AuctionEngine:
         """Pause the auction"""
         if self.state == AuctionState.IN_PROGRESS:
             self.state = AuctionState.PAUSED
+            self._pause_timer()
     
     def resume_auction(self):
         """Resume a paused auction"""
         if self.state == AuctionState.PAUSED:
             self.state = AuctionState.IN_PROGRESS
+            self._resume_timer()
     
     def get_current_player_info(self) -> Optional[Dict]:
         """Get info about current player being auctioned"""
@@ -300,4 +320,94 @@ class AuctionEngine:
             'average_price': avg_price,
             'results': self.results,
             'unsold': self.unsold_players
+        }
+    
+    # ========== Timer Methods ==========
+    
+    def enable_timer(self, duration: int = DEFAULT_TIMER_DURATION):
+        """
+        Enable timer-based auction mode.
+        
+        Args:
+            duration: Timer duration in seconds (30-120)
+        """
+        if duration < MIN_TIMER_DURATION or duration > MAX_TIMER_DURATION:
+            duration = DEFAULT_TIMER_DURATION
+        
+        self.timer_enabled = True
+        self.timer_duration = duration
+        self.timer_remaining = duration
+    
+    def disable_timer(self):
+        """Disable timer-based auction mode"""
+        self.timer_enabled = False
+        self._stop_timer()
+    
+    def _start_timer(self):
+        """Start the timer for current player"""
+        if not self.timer_enabled:
+            return
+        
+        self.timer_remaining = self.timer_duration
+        self.timer_active = True
+        self.timer_start_time = time.time()
+    
+    def _stop_timer(self):
+        """Stop the timer"""
+        self.timer_active = False
+        self.timer_start_time = None
+    
+    def _pause_timer(self):
+        """Pause the timer (save remaining time)"""
+        if not self.timer_active or self.timer_start_time is None:
+            return
+        
+        elapsed = time.time() - self.timer_start_time
+        self.timer_remaining = max(0, self.timer_remaining - elapsed)
+        self.timer_active = False
+        self.timer_start_time = None
+    
+    def _resume_timer(self):
+        """Resume the timer from paused state"""
+        if not self.timer_enabled or self.timer_active:
+            return
+        
+        self.timer_active = True
+        self.timer_start_time = time.time()
+    
+    def _reset_timer(self):
+        """Reset timer to full duration"""
+        self.timer_remaining = self.timer_duration
+        self.timer_active = False
+        self.timer_start_time = None
+    
+    def get_timer_remaining(self) -> float:
+        """
+        Get remaining time on timer.
+        
+        Returns:
+            Seconds remaining (0 if timer disabled or expired)
+        """
+        if not self.timer_enabled or not self.timer_active or self.timer_start_time is None:
+            return self.timer_remaining if self.timer_enabled else 0
+        
+        elapsed = time.time() - self.timer_start_time
+        remaining = max(0, self.timer_remaining - elapsed)
+        return remaining
+    
+    def is_timer_expired(self) -> bool:
+        """Check if timer has expired"""
+        if not self.timer_enabled:
+            return False
+        
+        return self.get_timer_remaining() <= 0
+    
+    def get_timer_info(self) -> Dict:
+        """Get timer information"""
+        return {
+            'enabled': self.timer_enabled,
+            'active': self.timer_active,
+            'duration': self.timer_duration,
+            'remaining': self.get_timer_remaining(),
+            'expired': self.is_timer_expired()
         }

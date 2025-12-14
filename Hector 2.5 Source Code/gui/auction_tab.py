@@ -49,6 +49,10 @@ def add_auction_tab(notebook, font, section_weights, batter_section_weights):
         current_bid_amount = tk.DoubleVar(value=0.0)
         team_id_map = {}  # Team Name → Team ID mapping from draft.csv
         draft_csv_loaded = False
+        timer_enabled = tk.BooleanVar(value=True)
+        timer_duration = tk.IntVar(value=60)
+        timer_update_job = None  # For scheduled timer updates
+        ai_bid_job = None  # For scheduled AI bid processing
         
     data = AuctionData()
     
@@ -96,6 +100,22 @@ def add_auction_tab(notebook, font, section_weights, batter_section_weights):
     
     team_status_label = tk.Label(row2, text="Teams not assigned", bg=DARK_BG, fg="#888", font=font)
     team_status_label.pack(side="left", padx=10)
+    
+    # Row 2b: Timer Configuration
+    row2b = tk.Frame(setup_frame, bg=DARK_BG)
+    row2b.pack(fill="x", pady=5)
+    
+    timer_check = tk.Checkbutton(row2b, text="Enable Timer", variable=data.timer_enabled,
+                                  bg=DARK_BG, fg="#d4d4d4", selectcolor="#2d2d2d",
+                                  activebackground=DARK_BG, font=font)
+    timer_check.pack(side="left", padx=5)
+    
+    tk.Label(row2b, text="Timer Duration:", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left", padx=5)
+    timer_scale = tk.Scale(row2b, from_=30, to=120, orient="horizontal", 
+                           variable=data.timer_duration, bg=DARK_BG, fg="#d4d4d4",
+                           highlightthickness=0, length=150)
+    timer_scale.pack(side="left", padx=5)
+    tk.Label(row2b, text="seconds", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
     
     # Row 3: Start Auction
     row3 = tk.Frame(setup_frame, bg=DARK_BG)
@@ -460,10 +480,15 @@ def start_auction(data, display_frame, font, section_weights, batter_section_wei
     data.auction_engine = AuctionEngine(data.budget_manager, data.ai_bidder_pool, data.team_id_map)
     data.auction_engine.initialize_auction(data.players, starting_prices)
     
+    # Enable timer if configured
+    if data.timer_enabled.get():
+        data.auction_engine.enable_timer(data.timer_duration.get())
+    
     # Set up callbacks
     data.auction_engine.on_bid_callback = lambda bid, player: on_bid_placed(data, bid, player)
     data.auction_engine.on_player_sold_callback = lambda result: on_player_sold(data, result)
     data.auction_engine.on_auction_complete_callback = lambda: on_auction_complete(data)
+    data.auction_engine.on_timer_update_callback = lambda: update_timer_display(data)
     
     # Start auction
     data.auction_engine.start_auction()
@@ -485,6 +510,23 @@ def show_live_auction_ui(data, parent, font):
     right_frame.pack(side="right", fill="both", padx=5)
     
     # ===== LEFT: Current Player =====
+    
+    # Timer display (if enabled)
+    if data.auction_engine.timer_enabled:
+        timer_frame = tk.Frame(left_frame, bg=DARK_BG)
+        timer_frame.pack(fill="x", pady=5)
+        
+        data.timer_label = tk.Label(timer_frame, text="60", bg=DARK_BG, fg=NEON_GREEN,
+                                     font=(font[0], 36, "bold"))
+        data.timer_label.pack()
+        
+        tk.Label(timer_frame, text="seconds remaining", bg=DARK_BG, fg="#888", font=font).pack()
+        
+        # Pause/Resume button
+        data.pause_btn = ttk.Button(timer_frame, text="⏸ Pause Timer",
+                                     command=lambda: toggle_pause_timer(data))
+        data.pause_btn.pack(pady=5)
+    
     player_frame = tk.LabelFrame(left_frame, text="Current Player", bg=DARK_BG, fg=NEON_GREEN,
                                   font=(font[0], font[1]+2, "bold"), padx=10, pady=10)
     player_frame.pack(fill="both", expand=True, pady=5)
@@ -577,6 +619,11 @@ def show_live_auction_ui(data, parent, font):
     
     # Initial update
     update_auction_display(data)
+    
+    # Start timer updates if enabled
+    if data.auction_engine.timer_enabled:
+        schedule_timer_update(data)
+        schedule_ai_bid_processing(data)
 
 
 def update_auction_display(data):
@@ -841,3 +888,79 @@ def export_results(data):
         )
     except Exception as e:
         messagebox.showerror("Export Failed", f"Failed to export results:\n{str(e)}")
+
+
+# ========== Timer Functions ==========
+
+def schedule_timer_update(data):
+    """Schedule periodic timer updates"""
+    if not data.auction_engine or not data.auction_engine.timer_enabled:
+        return
+    
+    update_timer_display(data)
+    
+    # Schedule next update in 100ms
+    if hasattr(data, 'auction_display_frame') and data.auction_display_frame.winfo_exists():
+        data.timer_update_job = data.auction_display_frame.after(100, lambda: schedule_timer_update(data))
+
+
+def update_timer_display(data):
+    """Update the timer display"""
+    if not data.auction_engine or not data.auction_engine.timer_enabled:
+        return
+    
+    if not hasattr(data, 'timer_label'):
+        return
+    
+    remaining = data.auction_engine.get_timer_remaining()
+    
+    # Update display
+    data.timer_label.config(text=f"{int(remaining)}")
+    
+    # Color coding: green > 30s, yellow 15-30s, red < 15s
+    if remaining > 30:
+        color = NEON_GREEN
+    elif remaining > 15:
+        color = "#FFD700"  # Yellow
+    else:
+        color = "#FF4444"  # Red
+    
+    data.timer_label.config(fg=color)
+    
+    # Check if timer expired
+    if data.auction_engine.is_timer_expired() and data.auction_engine.state == AuctionState.IN_PROGRESS:
+        # Auto-sell player
+        sell_player(data)
+
+
+def schedule_ai_bid_processing(data):
+    """Schedule periodic AI bid processing (every 2-3 seconds)"""
+    if not data.auction_engine or not data.auction_engine.timer_enabled:
+        return
+    
+    if data.auction_engine.state != AuctionState.IN_PROGRESS:
+        return
+    
+    # Process AI bids
+    if not data.auction_engine.is_timer_expired():
+        data.auction_engine.process_ai_bids()
+        update_auction_display(data)
+    
+    # Schedule next AI bid processing in 2.5 seconds
+    if hasattr(data, 'auction_display_frame') and data.auction_display_frame.winfo_exists():
+        data.ai_bid_job = data.auction_display_frame.after(2500, lambda: schedule_ai_bid_processing(data))
+
+
+def toggle_pause_timer(data):
+    """Toggle pause/resume of timer"""
+    if not data.auction_engine:
+        return
+    
+    if data.auction_engine.state == AuctionState.IN_PROGRESS:
+        data.auction_engine.pause_auction()
+        if hasattr(data, 'pause_btn'):
+            data.pause_btn.config(text="▶ Resume Timer")
+    elif data.auction_engine.state == AuctionState.PAUSED:
+        data.auction_engine.resume_auction()
+        if hasattr(data, 'pause_btn'):
+            data.pause_btn.config(text="⏸ Pause Timer")
