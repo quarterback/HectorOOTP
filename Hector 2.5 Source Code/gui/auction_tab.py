@@ -25,6 +25,10 @@ from auction.bidding_ai import AIBidderPool, BiddingStrategy
 
 from .style import DARK_BG, NEON_GREEN
 
+# Timer update intervals (in milliseconds)
+TIMER_UPDATE_INTERVAL_MS = 100  # Update timer display every 100ms
+AI_BID_INTERVAL_MS = 2500  # Process AI bids every 2.5 seconds
+
 
 def add_auction_tab(notebook, font, section_weights, batter_section_weights):
     """Add auction tab to main notebook"""
@@ -49,6 +53,10 @@ def add_auction_tab(notebook, font, section_weights, batter_section_weights):
         current_bid_amount = tk.DoubleVar(value=0.0)
         team_id_map = {}  # Team Name → Team ID mapping from draft.csv
         draft_csv_loaded = False
+        timer_enabled = tk.BooleanVar(value=True)
+        timer_duration = tk.IntVar(value=60)
+        timer_update_job = None  # For scheduled timer updates
+        ai_bid_job = None  # For scheduled AI bid processing
         
     data = AuctionData()
     
@@ -96,6 +104,22 @@ def add_auction_tab(notebook, font, section_weights, batter_section_weights):
     
     team_status_label = tk.Label(row2, text="Teams not assigned", bg=DARK_BG, fg="#888", font=font)
     team_status_label.pack(side="left", padx=10)
+    
+    # Row 2b: Timer Configuration
+    row2b = tk.Frame(setup_frame, bg=DARK_BG)
+    row2b.pack(fill="x", pady=5)
+    
+    timer_check = tk.Checkbutton(row2b, text="Enable Timer", variable=data.timer_enabled,
+                                  bg=DARK_BG, fg="#d4d4d4", selectcolor="#2d2d2d",
+                                  activebackground=DARK_BG, font=font)
+    timer_check.pack(side="left", padx=5)
+    
+    tk.Label(row2b, text="Timer Duration:", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left", padx=5)
+    timer_scale = tk.Scale(row2b, from_=30, to=120, orient="horizontal", 
+                           variable=data.timer_duration, bg=DARK_BG, fg="#d4d4d4",
+                           highlightthickness=0, length=150)
+    timer_scale.pack(side="left", padx=5)
+    tk.Label(row2b, text="seconds", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
     
     # Row 3: Start Auction
     row3 = tk.Frame(setup_frame, bg=DARK_BG)
@@ -223,7 +247,7 @@ def open_budget_config_dialog(data, font):
     
     dialog = tk.Toplevel()
     dialog.title("Configure Team Budgets")
-    dialog.geometry("600x500")
+    dialog.geometry("600x550")
     dialog.configure(bg=DARK_BG)
     
     # Instructions
@@ -231,18 +255,31 @@ def open_budget_config_dialog(data, font):
                      bg=DARK_BG, fg=NEON_GREEN, font=(font[0], font[1]+1, "bold"))
     instr.pack(pady=10)
     
-    # Quick set all
-    quick_frame = tk.Frame(dialog, bg=DARK_BG)
-    quick_frame.pack(fill="x", padx=10, pady=5)
+    # League-Wide Budget section (prominent at top)
+    league_frame = tk.LabelFrame(dialog, text="League-Wide Budget", bg=DARK_BG, fg=NEON_GREEN,
+                                  font=(font[0], font[1]+1, "bold"), padx=10, pady=10)
+    league_frame.pack(fill="x", padx=10, pady=5)
     
-    tk.Label(quick_frame, text="Set all teams to:", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
-    quick_var = tk.DoubleVar(value=100.0)
-    quick_entry = ttk.Entry(quick_frame, textvariable=quick_var, width=10)
-    quick_entry.pack(side="left", padx=5)
+    tk.Label(league_frame, text="Set budget for all teams:", bg=DARK_BG, fg="#d4d4d4", 
+            font=(font[0], font[1]), justify="left").pack(anchor="w", pady=2)
     
-    # Budget entries
-    scroll_frame = tk.Frame(dialog, bg=DARK_BG)
-    scroll_frame.pack(fill="both", expand=True, padx=10, pady=5)
+    league_budget_frame = tk.Frame(league_frame, bg=DARK_BG)
+    league_budget_frame.pack(fill="x", pady=5)
+    
+    tk.Label(league_budget_frame, text="Budget:", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
+    league_budget_var = tk.DoubleVar(value=100.0)
+    league_entry = ttk.Entry(league_budget_frame, textvariable=league_budget_var, width=10)
+    league_entry.pack(side="left", padx=5)
+    tk.Label(league_budget_frame, text="M", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
+    
+    # Individual team budgets section
+    teams_frame = tk.LabelFrame(dialog, text="Individual Team Budgets (Advanced)", 
+                                bg=DARK_BG, fg="#888", font=font, padx=5, pady=5)
+    teams_frame.pack(fill="both", expand=True, padx=10, pady=5)
+    
+    # Scroll frame
+    scroll_frame = tk.Frame(teams_frame, bg=DARK_BG)
+    scroll_frame.pack(fill="both", expand=True)
     
     canvas = tk.Canvas(scroll_frame, bg=DARK_BG, highlightthickness=0)
     scrollbar = ttk.Scrollbar(scroll_frame, orient="vertical", command=canvas.yview)
@@ -281,13 +318,15 @@ def open_budget_config_dialog(data, font):
         
         budget_vars[team] = var
     
-    def apply_quick_set():
-        quick_val = quick_var.get()
+    def apply_league_budget():
+        """Apply league-wide budget to all teams"""
+        league_val = league_budget_var.get()
         for var in budget_vars.values():
-            var.set(quick_val)
+            var.set(league_val)
     
-    quick_btn = ttk.Button(quick_frame, text="Apply to All", command=apply_quick_set)
-    quick_btn.pack(side="left", padx=5)
+    league_apply_btn = ttk.Button(league_budget_frame, text="Apply League-Wide Budget to All Teams", 
+                                  command=apply_league_budget)
+    league_apply_btn.pack(side="left", padx=5)
     
     # Save button
     def save_budgets():
@@ -312,7 +351,7 @@ def open_team_assignment_dialog(data, font):
     
     dialog = tk.Toplevel()
     dialog.title("Assign Teams (Human/AI)")
-    dialog.geometry("700x500")
+    dialog.geometry("800x500")
     dialog.configure(bg=DARK_BG)
     
     # Instructions
@@ -342,6 +381,7 @@ def open_team_assignment_dialog(data, font):
     # Team assignments
     team_vars = {}
     strategy_vars = {}
+    strategy_labels = {}  # To update strategy display
     teams = sorted(data.budget_config.team_budgets.keys())
     
     for team in teams:
@@ -349,7 +389,7 @@ def open_team_assignment_dialog(data, font):
         team_frame.pack(fill="x", pady=3)
         
         tk.Label(team_frame, text=f"{team}:", bg=DARK_BG, fg="#d4d4d4", 
-                font=font, width=10, anchor="w").pack(side="left")
+                font=font, width=15, anchor="w").pack(side="left")
         
         var = tk.StringVar(value="AI")
         human_rb = tk.Radiobutton(team_frame, text="Human", variable=var, value="Human",
@@ -370,8 +410,33 @@ def open_team_assignment_dialog(data, font):
         strategy_combo = ttk.Combobox(team_frame, textvariable=strategy_var, 
                                       values=["aggressive", "balanced", "conservative"],
                                       state="readonly", width=12)
-        strategy_combo.pack(side="left")
+        strategy_combo.pack(side="left", padx=5)
         strategy_vars[team] = strategy_var
+        
+        # Strategy display label - always visible
+        strategy_label = tk.Label(team_frame, text="[Balanced]", bg=DARK_BG, 
+                                  fg="#FFD700", font=(font[0], font[1], "bold"), width=15, anchor="w")
+        strategy_label.pack(side="left", padx=5)
+        strategy_labels[team] = strategy_label
+        
+        # Update strategy label when changed
+        def update_strategy_label(team=team):
+            strategy = strategy_vars[team].get()
+            strategy_labels[team].config(text=f"[{strategy.capitalize()}]")
+        
+        strategy_combo.bind("<<ComboboxSelected>>", lambda e, t=team: update_strategy_label(t))
+        
+        # Update strategy label when team type changes
+        def update_visibility(team=team):
+            team_type = team_vars[team].get()
+            if team_type == "Human":
+                strategy_labels[team].config(text="[N/A - Human]", fg="#888")
+            else:
+                update_strategy_label(team)
+                strategy_labels[team].config(fg="#FFD700")
+        
+        var.trace('w', lambda *args, t=team: update_visibility(t))
+        update_visibility(team)  # Initial update
     
     # Save button
     def save_assignments():
@@ -407,6 +472,17 @@ def check_ready_to_start(data):
 
 def start_auction(data, display_frame, font, section_weights, batter_section_weights):
     """Initialize and start the auction"""
+    # Sort players by OVR (highest first)
+    def get_ovr(player):
+        ovr_str = str(player.get('OVR', '0')).strip()
+        ovr_str = ovr_str.replace(' Stars', '').replace('Stars', '').strip()
+        try:
+            return float(ovr_str)
+        except:
+            return 0.0
+    
+    data.players.sort(key=get_ovr, reverse=True)
+    
     # Calculate valuations for all players
     data.valuations = calculate_all_valuations(
         data.players, section_weights, batter_section_weights,
@@ -434,10 +510,15 @@ def start_auction(data, display_frame, font, section_weights, batter_section_wei
     data.auction_engine = AuctionEngine(data.budget_manager, data.ai_bidder_pool, data.team_id_map)
     data.auction_engine.initialize_auction(data.players, starting_prices)
     
+    # Enable timer if configured
+    if data.timer_enabled.get():
+        data.auction_engine.enable_timer(data.timer_duration.get())
+    
     # Set up callbacks
     data.auction_engine.on_bid_callback = lambda bid, player: on_bid_placed(data, bid, player)
     data.auction_engine.on_player_sold_callback = lambda result: on_player_sold(data, result)
     data.auction_engine.on_auction_complete_callback = lambda: on_auction_complete(data)
+    data.auction_engine.on_timer_update_callback = lambda: update_timer_display(data)
     
     # Start auction
     data.auction_engine.start_auction()
@@ -459,6 +540,23 @@ def show_live_auction_ui(data, parent, font):
     right_frame.pack(side="right", fill="both", padx=5)
     
     # ===== LEFT: Current Player =====
+    
+    # Timer display (if enabled)
+    if data.auction_engine.timer_enabled:
+        timer_frame = tk.Frame(left_frame, bg=DARK_BG)
+        timer_frame.pack(fill="x", pady=5)
+        
+        data.timer_label = tk.Label(timer_frame, text="60", bg=DARK_BG, fg=NEON_GREEN,
+                                     font=(font[0], 36, "bold"))
+        data.timer_label.pack()
+        
+        tk.Label(timer_frame, text="seconds remaining", bg=DARK_BG, fg="#888", font=font).pack()
+        
+        # Pause/Resume button
+        data.pause_btn = ttk.Button(timer_frame, text="⏸ Pause Timer",
+                                     command=lambda: toggle_pause_timer(data))
+        data.pause_btn.pack(pady=5)
+    
     player_frame = tk.LabelFrame(left_frame, text="Current Player", bg=DARK_BG, fg=NEON_GREEN,
                                   font=(font[0], font[1]+2, "bold"), padx=10, pady=10)
     player_frame.pack(fill="both", expand=True, pady=5)
@@ -551,6 +649,11 @@ def show_live_auction_ui(data, parent, font):
     
     # Initial update
     update_auction_display(data)
+    
+    # Start timer updates if enabled
+    if data.auction_engine.timer_enabled:
+        schedule_timer_update(data)
+        schedule_ai_bid_processing(data)
 
 
 def update_auction_display(data):
@@ -574,9 +677,31 @@ def update_auction_display(data):
         current_price = player_info['current_price']
         high_bidder = player_info['high_bidder'] or "No bids yet"
         
+        # Build stats display based on position
+        stats_line = ""
+        pos_upper = str(pos).upper().strip()
+        if pos_upper in {'SP', 'RP', 'CL', 'P'}:
+            # Pitcher stats
+            era = player.get('ERA', '-')
+            whip = player.get('WHIP', '-')
+            k9 = player.get('K/9', '-')
+            war = player.get('WAR', '-')
+            stats_line = f"Stats: ERA {era} | WHIP {whip} | K/9 {k9} | WAR {war}"
+        else:
+            # Batter stats
+            avg = player.get('AVG', '-')
+            obp = player.get('OBP', '-')
+            slg = player.get('SLG', '-')
+            hr = player.get('HR', '-')
+            rbi = player.get('RBI', '-')
+            war = player.get('WAR', '-')
+            stats_line = f"Stats: AVG {avg} | OBP {obp} | SLG {slg} | HR {hr} | RBI {rbi} | WAR {war}"
+        
         info_text = f"""
 {name}
 Position: {pos}  |  Age: {age}  |  OVR: {ovr}  |  POT: {pot}
+
+{stats_line}
 
 Suggested Value: {format_price(suggested)}
 Current Price: {format_price(current_price)}
@@ -793,3 +918,79 @@ def export_results(data):
         )
     except Exception as e:
         messagebox.showerror("Export Failed", f"Failed to export results:\n{str(e)}")
+
+
+# ========== Timer Functions ==========
+
+def schedule_timer_update(data):
+    """Schedule periodic timer updates"""
+    if not data.auction_engine or not data.auction_engine.timer_enabled:
+        return
+    
+    update_timer_display(data)
+    
+    # Schedule next update
+    if hasattr(data, 'auction_display_frame') and data.auction_display_frame.winfo_exists():
+        data.timer_update_job = data.auction_display_frame.after(TIMER_UPDATE_INTERVAL_MS, lambda: schedule_timer_update(data))
+
+
+def update_timer_display(data):
+    """Update the timer display"""
+    if not data.auction_engine or not data.auction_engine.timer_enabled:
+        return
+    
+    if not hasattr(data, 'timer_label'):
+        return
+    
+    remaining = data.auction_engine.get_timer_remaining()
+    
+    # Update display
+    data.timer_label.config(text=f"{int(remaining)}")
+    
+    # Color coding: green > 30s, yellow 15-30s, red < 15s
+    if remaining > 30:
+        color = NEON_GREEN
+    elif remaining > 15:
+        color = "#FFD700"  # Yellow
+    else:
+        color = "#FF4444"  # Red
+    
+    data.timer_label.config(fg=color)
+    
+    # Check if timer expired
+    if data.auction_engine.is_timer_expired() and data.auction_engine.state == AuctionState.IN_PROGRESS:
+        # Auto-sell player
+        sell_player(data)
+
+
+def schedule_ai_bid_processing(data):
+    """Schedule periodic AI bid processing (every 2-3 seconds)"""
+    if not data.auction_engine or not data.auction_engine.timer_enabled:
+        return
+    
+    if data.auction_engine.state != AuctionState.IN_PROGRESS:
+        return
+    
+    # Process AI bids
+    if not data.auction_engine.is_timer_expired():
+        data.auction_engine.process_ai_bids()
+        update_auction_display(data)
+    
+    # Schedule next AI bid processing
+    if hasattr(data, 'auction_display_frame') and data.auction_display_frame.winfo_exists():
+        data.ai_bid_job = data.auction_display_frame.after(AI_BID_INTERVAL_MS, lambda: schedule_ai_bid_processing(data))
+
+
+def toggle_pause_timer(data):
+    """Toggle pause/resume of timer"""
+    if not data.auction_engine:
+        return
+    
+    if data.auction_engine.state == AuctionState.IN_PROGRESS:
+        data.auction_engine.pause_auction()
+        if hasattr(data, 'pause_btn'):
+            data.pause_btn.config(text="▶ Resume Timer")
+    elif data.auction_engine.state == AuctionState.PAUSED:
+        data.auction_engine.resume_auction()
+        if hasattr(data, 'pause_btn'):
+            data.pause_btn.config(text="⏸ Pause Timer")

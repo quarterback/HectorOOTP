@@ -77,6 +77,7 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     """
     position = player.get('POS', '').upper().strip()
     age = int(parse_rating(player.get('Age', 25)))
+    ovr = parse_rating(player.get('OVR', 0))
     
     # Determine if pitcher or batter
     is_pitcher = position in {'SP', 'RP', 'CL', 'P'}
@@ -94,6 +95,7 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     normalized_score = min(float(base_score), 100.0)
     
     # Base value as percentage of budget (score of 100 = TOP_PLAYER_BUDGET_PERCENTAGE of budget)
+    # User controls the valuation through the scoring system, not through OVR caps
     base_value = (normalized_score / 100.0) * (base_budget * TOP_PLAYER_BUDGET_PERCENTAGE)
     
     # Apply position scarcity
