@@ -80,13 +80,15 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     
     # Calculate base score using existing Portal systems
     if is_pitcher:
-        base_score = calculate_pitcher_score(player, section_weights)
+        score_result = calculate_pitcher_score(player, section_weights)
+        base_score = score_result.get('total', 0) if isinstance(score_result, dict) else score_result
     else:
-        base_score = calculate_batter_score(player, batter_section_weights)
+        score_result = calculate_batter_score(player, batter_section_weights)
+        base_score = score_result.get('total', 0) if isinstance(score_result, dict) else score_result
     
     # Normalize score to 0-100 range if needed
     # Assuming scores are already in reasonable range, cap at 100
-    normalized_score = min(base_score, 100.0)
+    normalized_score = min(float(base_score), 100.0)
     
     # Base value as percentage of budget (score of 100 = 20% of budget)
     base_value = (normalized_score / 100.0) * (base_budget * 0.20)
