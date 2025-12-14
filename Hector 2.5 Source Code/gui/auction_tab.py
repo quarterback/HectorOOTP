@@ -639,10 +639,10 @@ def show_live_auction_ui(data, parent, font):
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
     
-    # Enable mouse wheel scrolling
+    # Enable mouse wheel scrolling (bound to canvas only)
     def on_mousewheel(event):
         canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-    canvas.bind_all("<MouseWheel>", on_mousewheel)
+    canvas.bind("<MouseWheel>", on_mousewheel)
     
     # Progress info
     progress_frame = tk.LabelFrame(right_frame, text="Progress", bg=DARK_BG, fg=NEON_GREEN,
@@ -851,7 +851,7 @@ def pass_player(data):
 def on_bid_placed(data, bid, player):
     """Callback when bid is placed"""
     # Update bid history display with color coding
-    bid_type_icon = "👤" if bid.bid_type.value == "human" else "🤖"
+    bid_type_icon = "👤" if bid.bid_type == BidType.HUMAN else "🤖"
     msg = f"{bid_type_icon} {bid.team} bids {format_price(bid.amount)}"
     
     if hasattr(data, 'bid_history_text'):
@@ -861,13 +861,14 @@ def on_bid_placed(data, bid, player):
         # Choose tag based on bid type and whether they're the high bidder
         if is_high_bidder:
             tag = "high_bidder"
-        elif bid.bid_type.value == "human":
+        elif bid.bid_type == BidType.HUMAN:
             tag = "human_bid"
         else:
             tag = "ai_bid"
         
-        # Insert at the top with appropriate tag
-        data.bid_history_text.insert('1.0', msg + "\n", tag)
+        # Insert at the top with appropriate tag (message without newline)
+        data.bid_history_text.insert('1.0', msg, tag)
+        data.bid_history_text.insert('1.0', "\n")
 
 
 def on_player_sold(data, result):
