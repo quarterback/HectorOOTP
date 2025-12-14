@@ -46,8 +46,8 @@ def import_draft_csv(csv_path: str) -> Dict[str, str]:
     with open(csv_path, 'r', encoding='utf-8-sig') as f:
         reader = csv.reader(f)
         for row in reader:
-            # Skip comment lines
-            if not row or (row[0] and row[0].startswith('//')):
+            # Skip empty rows or comment lines
+            if not row or row[0].startswith('//'):
                 continue
             
             # Only process Round 1 picks (column 0 = '1')
@@ -230,7 +230,7 @@ def validate_draft_csv_format(csv_path: str) -> Tuple[bool, Optional[str], List[
                 # OOTP format - validate by checking if we have data rows with at least 5 columns
                 reader = csv.reader(f)
                 for row in reader:
-                    if not row or (row[0] and row[0].startswith('//')):
+                    if not row or row[0].startswith('//'):
                         continue
                     # Found a data row - check if it has enough columns
                     if len(row) >= 5:
