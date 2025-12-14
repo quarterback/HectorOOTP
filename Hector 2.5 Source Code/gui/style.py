@@ -1,6 +1,10 @@
 import tkinter as tk
 from tkinter import ttk
 
+# Color constants
+DARK_BG = "#2d2d2d"
+NEON_GREEN = "#00ff7f"
+
 def setup_theme(font, root):
     style = ttk.Style(root)
     
