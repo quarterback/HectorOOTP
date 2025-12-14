@@ -2,6 +2,19 @@
 
 All notable changes to Rosterlytics (formerly Hector OOTP Analyzer) will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **Auction UI Improvements**: Enhanced visibility and usability of the live auction interface
+  - Increased bid history display from 8 to 15 rows for better visibility
+  - Added color-coded bid display (blue for human, orange for AI, bold green for high bidder)
+  - Added bid type icons (👤 for human, 🤖 for AI) to distinguish bids at a glance
+  - Expanded team dashboard width from 300px to 400px
+  - Implemented compact two-row layout for team budget display
+  - Added budget health color coding (green >60%, orange 30-60%, red <30%)
+  - Added budget percentage indicators for quick reference
+  - Enabled mouse wheel scrolling for team dashboard
+
 ## [2.7] - 2025-12-04
 
 ### Changed
