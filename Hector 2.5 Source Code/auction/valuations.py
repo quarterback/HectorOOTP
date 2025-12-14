@@ -14,6 +14,9 @@ from batters import calculate_batter_score
 from pitchers import calculate_score as calculate_pitcher_score
 from trade_value import POSITION_SCARCITY, AGE_MULTIPLIERS
 
+# Constants for valuation
+TOP_PLAYER_BUDGET_PERCENTAGE = 0.20  # Top player worth 20% of budget
+
 
 def parse_rating(value) -> float:
     """Parse a rating value from player data"""
@@ -90,8 +93,8 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     # Assuming scores are already in reasonable range, cap at 100
     normalized_score = min(float(base_score), 100.0)
     
-    # Base value as percentage of budget (score of 100 = 20% of budget)
-    base_value = (normalized_score / 100.0) * (base_budget * 0.20)
+    # Base value as percentage of budget (score of 100 = TOP_PLAYER_BUDGET_PERCENTAGE of budget)
+    base_value = (normalized_score / 100.0) * (base_budget * TOP_PLAYER_BUDGET_PERCENTAGE)
     
     # Apply position scarcity
     pos_multiplier = get_position_scarcity(position)

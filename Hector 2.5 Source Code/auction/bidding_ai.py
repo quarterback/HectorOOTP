@@ -6,6 +6,10 @@ from enum import Enum
 from typing import Dict, List, Optional
 import random
 
+# Constants for AI bidding behavior
+RANDOM_PASS_RATE = 0.10  # 10% chance to pass even when interested
+MAX_SINGLE_PLAYER_BUDGET_PCT = 0.40  # Max 40% of remaining budget on one player
+
 
 class BiddingStrategy(Enum):
     """AI bidding strategy types"""
@@ -129,8 +133,8 @@ class AIBidder:
         if not valid:
             return False
         
-        # Add some randomness (10% chance to pass even if conditions met)
-        if random.random() < 0.10:
+        # Add some randomness (RANDOM_PASS_RATE chance to pass even if conditions met)
+        if random.random() < RANDOM_PASS_RATE:
             return False
         
         return True
@@ -167,7 +171,7 @@ class AIBidder:
         
         # Ensure we can afford it
         remaining = self.budget_manager.get_remaining_budget(self.team)
-        max_bid = min(max_bid, remaining * 0.4)  # Don't spend more than 40% of remaining on one player
+        max_bid = min(max_bid, remaining * MAX_SINGLE_PLAYER_BUDGET_PCT)
         
         return round(max_bid, 2)
     

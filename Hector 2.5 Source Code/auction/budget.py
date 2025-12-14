@@ -4,8 +4,11 @@ Handles budget configuration, tracking, and validation.
 """
 
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
+
+# Constants
+DEFAULT_RESERVE_PER_PLAYER = 1.0  # Reserve $1M per remaining required player
 
 
 @dataclass
@@ -64,16 +67,16 @@ class BudgetManager:
     def can_afford_bid(self, team: str, bid_amount: float) -> bool:
         """Check if team can afford a bid"""
         remaining = self.get_remaining_budget(team)
-        # Must leave at least $1M per remaining required roster spot
+        # Must leave at least DEFAULT_RESERVE_PER_PLAYER per remaining required roster spot
         roster_remaining = self.config.min_roster_size - self.roster_sizes.get(team, 0)
-        min_reserve = max(0, roster_remaining - 1) * 1.0  # Reserve $1M for each additional required player
+        min_reserve = max(0, roster_remaining - 1) * DEFAULT_RESERVE_PER_PLAYER
         return bid_amount <= (remaining - min_reserve)
     
     def can_add_player(self, team: str) -> bool:
         """Check if team can add another player"""
         return self.roster_sizes.get(team, 0) < self.config.max_roster_size
     
-    def validate_bid(self, team: str, bid_amount: float) -> tuple[bool, Optional[str]]:
+    def validate_bid(self, team: str, bid_amount: float) -> Tuple[bool, Optional[str]]:
         """
         Validate if a bid is allowed.
         Returns (is_valid, error_message)

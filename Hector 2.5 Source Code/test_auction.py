@@ -48,29 +48,34 @@ def test_csv_handler():
     """Test CSV import/export"""
     from auction.csv_handler import import_free_agents_csv, validate_csv_format, create_sample_free_agents_csv
     import os
+    import tempfile
     
     print("Testing CSV Handler...")
     
-    # Create sample CSV
-    test_file = '/tmp/test_auction.csv'
-    create_sample_free_agents_csv(test_file)
-    assert os.path.exists(test_file)
+    # Create sample CSV in temp directory
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        test_file = f.name
     
-    # Validate format
-    valid, error, fields = validate_csv_format(test_file)
-    assert valid, f"CSV validation failed: {error}"
-    assert 'Name' in fields
-    assert 'POS' in fields
-    assert 'Age' in fields
-    
-    # Import players
-    players = import_free_agents_csv(test_file)
-    assert len(players) == 3
-    assert players[0]['Name'] == 'John Smith'
-    assert players[0]['POS'] == 'SP'
-    
-    # Cleanup
-    os.remove(test_file)
+    try:
+        create_sample_free_agents_csv(test_file)
+        assert os.path.exists(test_file)
+        
+        # Validate format
+        valid, error, fields = validate_csv_format(test_file)
+        assert valid, f"CSV validation failed: {error}"
+        assert 'Name' in fields
+        assert 'POS' in fields
+        assert 'Age' in fields
+        
+        # Import players
+        players = import_free_agents_csv(test_file)
+        assert len(players) == 3
+        assert players[0]['Name'] == 'John Smith'
+        assert players[0]['POS'] == 'SP'
+    finally:
+        # Cleanup
+        if os.path.exists(test_file):
+            os.remove(test_file)
     
     print("✓ CSV Handler tests passed")
 

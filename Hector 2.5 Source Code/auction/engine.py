@@ -4,9 +4,13 @@ Manages auction state and bidding flow.
 """
 
 from enum import Enum
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+
+# Constants
+DEFAULT_MIN_BID_INCREMENT = 0.5  # $0.5M minimum increment
+DEFAULT_AUTO_ADVANCE_DELAY = 3.0  # Seconds to wait before auto-advancing
 
 
 class AuctionState(Enum):
@@ -62,9 +66,9 @@ class AuctionEngine:
         self.results: List[AuctionResult] = []
         self.unsold_players: List[Dict] = []
         
-        # Auction parameters
-        self.min_bid_increment: float = 0.5  # $0.5M minimum increment
-        self.auto_advance_delay: float = 3.0  # Seconds to wait before auto-advancing
+        # Auction parameters (configurable)
+        self.min_bid_increment: float = DEFAULT_MIN_BID_INCREMENT
+        self.auto_advance_delay: float = DEFAULT_AUTO_ADVANCE_DELAY
         
         # Callbacks for UI updates
         self.on_bid_callback: Optional[Callable] = None
@@ -111,7 +115,7 @@ class AuctionEngine:
         self.current_bid_type = None
         self.bid_history = []
     
-    def place_bid(self, team: str, amount: float, bid_type: BidType = BidType.HUMAN) -> tuple[bool, Optional[str]]:
+    def place_bid(self, team: str, amount: float, bid_type: BidType = BidType.HUMAN) -> Tuple[bool, Optional[str]]:
         """
         Place a bid for the current player.
         

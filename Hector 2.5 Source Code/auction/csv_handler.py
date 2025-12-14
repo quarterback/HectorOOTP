@@ -4,7 +4,7 @@ Handles reading OOTP free agent CSV exports and writing auction results.
 """
 
 import csv
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 
 
@@ -147,7 +147,7 @@ def _calculate_contract_years(age: int, price: float) -> int:
         return 1
 
 
-def validate_csv_format(csv_path: str) -> tuple[bool, Optional[str], List[str]]:
+def validate_csv_format(csv_path: str) -> Tuple[bool, Optional[str], List[str]]:
     """
     Validate that CSV has required fields for auction.
     
