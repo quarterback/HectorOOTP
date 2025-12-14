@@ -25,6 +25,7 @@ from .roster_builder_tab import add_roster_builder_tab
 from .advanced_stats_tab import add_advanced_stats_tab
 from .auto_contract_tab import add_auto_contract_tab
 from .league_tab import add_league_tab
+from .auction_tab import add_auction_tab
 from percentiles import initialize_percentiles
 from advanced_stats import add_advanced_stats_to_players
 from .widgets import (
@@ -316,6 +317,7 @@ def build_gui():
             roster_builder_tab = add_roster_builder_tab(notebook, font)
             advanced_stats_tab = add_advanced_stats_tab(notebook, font)
             auto_contract_tab = add_auto_contract_tab(notebook, font)
+            auction_tab = add_auction_tab(notebook, font, section_weights, batter_section_weights)
             root._gui_vars = {
                 "summary_left_var": summary_left_var,
                 "summary_right_var": summary_right_var,
