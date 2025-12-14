@@ -77,6 +77,7 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     """
     position = player.get('POS', '').upper().strip()
     age = int(parse_rating(player.get('Age', 25)))
+    ovr = parse_rating(player.get('OVR', 0))
     
     # Determine if pitcher or batter
     is_pitcher = position in {'SP', 'RP', 'CL', 'P'}
@@ -93,8 +94,15 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     # Assuming scores are already in reasonable range, cap at 100
     normalized_score = min(float(base_score), 100.0)
     
-    # Base value as percentage of budget (score of 100 = TOP_PLAYER_BUDGET_PERCENTAGE of budget)
-    base_value = (normalized_score / 100.0) * (base_budget * TOP_PLAYER_BUDGET_PERCENTAGE)
+    # Apply minimum OVR threshold - players below OVR 40 get drastically reduced valuations
+    if ovr < 40:
+        # OVR 30 players should be worth ~$1-2M regardless of other factors
+        base_value = (ovr / 40.0) * 2.0  # Scale from 0 to 2M for OVR 0-40
+    else:
+        # Base value heavily weighted by OVR for players above threshold
+        # Formula: base_value = (OVR / 100) * base_budget * TOP_PLAYER_BUDGET_PERCENTAGE * position_scarcity * age_multiplier
+        ovr_factor = (ovr / 100.0)
+        base_value = ovr_factor * (base_budget * TOP_PLAYER_BUDGET_PERCENTAGE)
     
     # Apply position scarcity
     pos_multiplier = get_position_scarcity(position)
@@ -106,6 +114,10 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     
     # Calculate suggested price (conservative estimate)
     suggested_price = max(0.5, age_adjusted)  # Minimum $0.5M
+    
+    # For very low OVR players, cap the suggested price
+    if ovr < 40:
+        suggested_price = min(suggested_price, 2.0)  # Cap at $2M for low OVR
     
     # Calculate maximum price (aggressive bidding limit)
     max_price = suggested_price * 1.2

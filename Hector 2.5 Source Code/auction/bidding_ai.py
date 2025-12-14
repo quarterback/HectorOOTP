@@ -32,14 +32,17 @@ class AIBidder:
             self.max_valuation_pct = 1.10
             self.star_priority = True
             self.value_threshold = 60  # Only bids on players with score >= 60
+            self.min_ovr = 55  # Minimum OVR rating
         elif strategy == BiddingStrategy.BALANCED:
             self.max_valuation_pct = 0.95
             self.star_priority = False
             self.value_threshold = 45
+            self.min_ovr = 45  # Minimum OVR rating
         else:  # CONSERVATIVE
             self.max_valuation_pct = 0.85
             self.star_priority = False
             self.value_threshold = 40
+            self.min_ovr = 40  # Minimum OVR rating
         
         # Position needs tracking
         self.position_needs: Dict[str, int] = self._initialize_position_needs()
@@ -89,6 +92,18 @@ class AIBidder:
         """
         player_name = player.get('Name', '')
         position = player.get('POS', '').upper().strip()
+        
+        # Check OVR threshold FIRST (before other checks)
+        ovr_str = str(player.get('OVR', '0')).strip()
+        ovr_str = ovr_str.replace(' Stars', '').replace('Stars', '').strip()
+        try:
+            ovr = float(ovr_str)
+        except:
+            ovr = 0.0
+        
+        # Hard OVR threshold check - reject immediately if below minimum
+        if ovr < self.min_ovr:
+            return False
         
         # Check if we have valuation for this player
         if player_name not in self.valuations:

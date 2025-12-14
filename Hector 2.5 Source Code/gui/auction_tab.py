@@ -223,7 +223,7 @@ def open_budget_config_dialog(data, font):
     
     dialog = tk.Toplevel()
     dialog.title("Configure Team Budgets")
-    dialog.geometry("600x500")
+    dialog.geometry("600x550")
     dialog.configure(bg=DARK_BG)
     
     # Instructions
@@ -231,18 +231,31 @@ def open_budget_config_dialog(data, font):
                      bg=DARK_BG, fg=NEON_GREEN, font=(font[0], font[1]+1, "bold"))
     instr.pack(pady=10)
     
-    # Quick set all
-    quick_frame = tk.Frame(dialog, bg=DARK_BG)
-    quick_frame.pack(fill="x", padx=10, pady=5)
+    # League-Wide Budget section (prominent at top)
+    league_frame = tk.LabelFrame(dialog, text="League-Wide Budget", bg=DARK_BG, fg=NEON_GREEN,
+                                  font=(font[0], font[1]+1, "bold"), padx=10, pady=10)
+    league_frame.pack(fill="x", padx=10, pady=5)
     
-    tk.Label(quick_frame, text="Set all teams to:", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
-    quick_var = tk.DoubleVar(value=100.0)
-    quick_entry = ttk.Entry(quick_frame, textvariable=quick_var, width=10)
-    quick_entry.pack(side="left", padx=5)
+    tk.Label(league_frame, text="Set budget for all teams:", bg=DARK_BG, fg="#d4d4d4", 
+            font=(font[0], font[1]), justify="left").pack(anchor="w", pady=2)
     
-    # Budget entries
-    scroll_frame = tk.Frame(dialog, bg=DARK_BG)
-    scroll_frame.pack(fill="both", expand=True, padx=10, pady=5)
+    league_budget_frame = tk.Frame(league_frame, bg=DARK_BG)
+    league_budget_frame.pack(fill="x", pady=5)
+    
+    tk.Label(league_budget_frame, text="Budget:", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
+    league_budget_var = tk.DoubleVar(value=100.0)
+    league_entry = ttk.Entry(league_budget_frame, textvariable=league_budget_var, width=10)
+    league_entry.pack(side="left", padx=5)
+    tk.Label(league_budget_frame, text="M", bg=DARK_BG, fg="#d4d4d4", font=font).pack(side="left")
+    
+    # Individual team budgets section
+    teams_frame = tk.LabelFrame(dialog, text="Individual Team Budgets (Advanced)", 
+                                bg=DARK_BG, fg="#888", font=font, padx=5, pady=5)
+    teams_frame.pack(fill="both", expand=True, padx=10, pady=5)
+    
+    # Scroll frame
+    scroll_frame = tk.Frame(teams_frame, bg=DARK_BG)
+    scroll_frame.pack(fill="both", expand=True)
     
     canvas = tk.Canvas(scroll_frame, bg=DARK_BG, highlightthickness=0)
     scrollbar = ttk.Scrollbar(scroll_frame, orient="vertical", command=canvas.yview)
@@ -281,13 +294,15 @@ def open_budget_config_dialog(data, font):
         
         budget_vars[team] = var
     
-    def apply_quick_set():
-        quick_val = quick_var.get()
+    def apply_league_budget():
+        """Apply league-wide budget to all teams"""
+        league_val = league_budget_var.get()
         for var in budget_vars.values():
-            var.set(quick_val)
+            var.set(league_val)
     
-    quick_btn = ttk.Button(quick_frame, text="Apply to All", command=apply_quick_set)
-    quick_btn.pack(side="left", padx=5)
+    league_apply_btn = ttk.Button(league_budget_frame, text="Apply League-Wide Budget to All Teams", 
+                                  command=apply_league_budget)
+    league_apply_btn.pack(side="left", padx=5)
     
     # Save button
     def save_budgets():
@@ -407,6 +422,17 @@ def check_ready_to_start(data):
 
 def start_auction(data, display_frame, font, section_weights, batter_section_weights):
     """Initialize and start the auction"""
+    # Sort players by OVR (highest first)
+    def get_ovr(player):
+        ovr_str = str(player.get('OVR', '0')).strip()
+        ovr_str = ovr_str.replace(' Stars', '').replace('Stars', '').strip()
+        try:
+            return float(ovr_str)
+        except:
+            return 0.0
+    
+    data.players.sort(key=get_ovr, reverse=True)
+    
     # Calculate valuations for all players
     data.valuations = calculate_all_valuations(
         data.players, section_weights, batter_section_weights,
@@ -574,9 +600,31 @@ def update_auction_display(data):
         current_price = player_info['current_price']
         high_bidder = player_info['high_bidder'] or "No bids yet"
         
+        # Build stats display based on position
+        stats_line = ""
+        pos_upper = str(pos).upper().strip()
+        if pos_upper in {'SP', 'RP', 'CL', 'P'}:
+            # Pitcher stats
+            era = player.get('ERA', '-')
+            whip = player.get('WHIP', '-')
+            k9 = player.get('K/9', '-')
+            war = player.get('WAR', '-')
+            stats_line = f"Stats: ERA {era} | WHIP {whip} | K/9 {k9} | WAR {war}"
+        else:
+            # Batter stats
+            avg = player.get('AVG', '-')
+            obp = player.get('OBP', '-')
+            slg = player.get('SLG', '-')
+            hr = player.get('HR', '-')
+            rbi = player.get('RBI', '-')
+            war = player.get('WAR', '-')
+            stats_line = f"Stats: AVG {avg} | OBP {obp} | SLG {slg} | HR {hr} | RBI {rbi} | WAR {war}"
+        
         info_text = f"""
 {name}
 Position: {pos}  |  Age: {age}  |  OVR: {ovr}  |  POT: {pot}
+
+{stats_line}
 
 Suggested Value: {format_price(suggested)}
 Current Price: {format_price(current_price)}
