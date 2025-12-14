@@ -98,7 +98,7 @@ class AIBidder:
         ovr_str = ovr_str.replace(' Stars', '').replace('Stars', '').strip()
         try:
             ovr = float(ovr_str)
-        except:
+        except (ValueError, TypeError):
             ovr = 0.0
         
         # Hard OVR threshold check - reject immediately if below minimum

@@ -25,6 +25,10 @@ from auction.bidding_ai import AIBidderPool, BiddingStrategy
 
 from .style import DARK_BG, NEON_GREEN
 
+# Timer update intervals (in milliseconds)
+TIMER_UPDATE_INTERVAL_MS = 100  # Update timer display every 100ms
+AI_BID_INTERVAL_MS = 2500  # Process AI bids every 2.5 seconds
+
 
 def add_auction_tab(notebook, font, section_weights, batter_section_weights):
     """Add auction tab to main notebook"""
@@ -899,9 +903,9 @@ def schedule_timer_update(data):
     
     update_timer_display(data)
     
-    # Schedule next update in 100ms
+    # Schedule next update
     if hasattr(data, 'auction_display_frame') and data.auction_display_frame.winfo_exists():
-        data.timer_update_job = data.auction_display_frame.after(100, lambda: schedule_timer_update(data))
+        data.timer_update_job = data.auction_display_frame.after(TIMER_UPDATE_INTERVAL_MS, lambda: schedule_timer_update(data))
 
 
 def update_timer_display(data):
@@ -946,9 +950,9 @@ def schedule_ai_bid_processing(data):
         data.auction_engine.process_ai_bids()
         update_auction_display(data)
     
-    # Schedule next AI bid processing in 2.5 seconds
+    # Schedule next AI bid processing
     if hasattr(data, 'auction_display_frame') and data.auction_display_frame.winfo_exists():
-        data.ai_bid_job = data.auction_display_frame.after(2500, lambda: schedule_ai_bid_processing(data))
+        data.ai_bid_job = data.auction_display_frame.after(AI_BID_INTERVAL_MS, lambda: schedule_ai_bid_processing(data))
 
 
 def toggle_pause_timer(data):
