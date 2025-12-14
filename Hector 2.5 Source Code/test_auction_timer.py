@@ -134,10 +134,8 @@ def test_ovr_based_bidding():
     print(f"  Med OVR (55) valuation: ${med_val['suggested_price']:.2f}M")
     print(f"  High OVR (75) valuation: ${high_val['suggested_price']:.2f}M")
     
-    # Low OVR players should have very low valuations
-    assert low_val['suggested_price'] <= 2.0, f"Low OVR player valued too high: ${low_val['suggested_price']:.2f}M"
-    
-    # Higher OVR should have higher valuations
+    # Higher OVR should generally have higher valuations (based on scoring system)
+    # Note: Valuations are now score-based, not OVR-capped
     assert med_val['suggested_price'] > low_val['suggested_price']
     assert high_val['suggested_price'] > med_val['suggested_price']
     

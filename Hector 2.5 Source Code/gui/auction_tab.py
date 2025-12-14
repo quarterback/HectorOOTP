@@ -351,7 +351,7 @@ def open_team_assignment_dialog(data, font):
     
     dialog = tk.Toplevel()
     dialog.title("Assign Teams (Human/AI)")
-    dialog.geometry("700x500")
+    dialog.geometry("800x500")
     dialog.configure(bg=DARK_BG)
     
     # Instructions
@@ -381,6 +381,7 @@ def open_team_assignment_dialog(data, font):
     # Team assignments
     team_vars = {}
     strategy_vars = {}
+    strategy_labels = {}  # To update strategy display
     teams = sorted(data.budget_config.team_budgets.keys())
     
     for team in teams:
@@ -388,7 +389,7 @@ def open_team_assignment_dialog(data, font):
         team_frame.pack(fill="x", pady=3)
         
         tk.Label(team_frame, text=f"{team}:", bg=DARK_BG, fg="#d4d4d4", 
-                font=font, width=10, anchor="w").pack(side="left")
+                font=font, width=15, anchor="w").pack(side="left")
         
         var = tk.StringVar(value="AI")
         human_rb = tk.Radiobutton(team_frame, text="Human", variable=var, value="Human",
@@ -409,8 +410,33 @@ def open_team_assignment_dialog(data, font):
         strategy_combo = ttk.Combobox(team_frame, textvariable=strategy_var, 
                                       values=["aggressive", "balanced", "conservative"],
                                       state="readonly", width=12)
-        strategy_combo.pack(side="left")
+        strategy_combo.pack(side="left", padx=5)
         strategy_vars[team] = strategy_var
+        
+        # Strategy display label - always visible
+        strategy_label = tk.Label(team_frame, text="[Balanced]", bg=DARK_BG, 
+                                  fg="#FFD700", font=(font[0], font[1], "bold"), width=15, anchor="w")
+        strategy_label.pack(side="left", padx=5)
+        strategy_labels[team] = strategy_label
+        
+        # Update strategy label when changed
+        def update_strategy_label(team=team):
+            strategy = strategy_vars[team].get()
+            strategy_labels[team].config(text=f"[{strategy.capitalize()}]")
+        
+        strategy_combo.bind("<<ComboboxSelected>>", lambda e, t=team: update_strategy_label(t))
+        
+        # Update strategy label when team type changes
+        def update_visibility(team=team):
+            team_type = team_vars[team].get()
+            if team_type == "Human":
+                strategy_labels[team].config(text="[N/A - Human]", fg="#888")
+            else:
+                update_strategy_label(team)
+                strategy_labels[team].config(fg="#FFD700")
+        
+        var.trace('w', lambda *args, t=team: update_visibility(t))
+        update_visibility(team)  # Initial update
     
     # Save button
     def save_assignments():

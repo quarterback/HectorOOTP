@@ -49,20 +49,15 @@ def verify_implementation():
     print("   ✓ Timer can be enabled and configured")
     print()
     
-    # 2. Verify OVR-based valuation
-    print("2. OVR-Based Valuation System")
+    # 2. Verify score-based valuation system
+    print("2. Score-Based Valuation System")
     print("-" * 70)
-    from auction.valuations import (
-        calculate_player_valuation,
-        MIN_OVR_THRESHOLD,
-        LOW_OVR_MAX_VALUE
-    )
+    from auction.valuations import calculate_player_valuation
     import pitcher_weights
     import batter_weights
     
-    print(f"   ✓ OVR thresholds defined:")
-    print(f"     - MIN_OVR_THRESHOLD: {MIN_OVR_THRESHOLD}")
-    print(f"     - LOW_OVR_MAX_VALUE: ${LOW_OVR_MAX_VALUE}M")
+    print(f"   ✓ Valuations now based on Portal scoring system")
+    print(f"   ✓ User controls baseline through scoring weights")
     
     # Test low OVR player
     low_player = {
@@ -83,8 +78,7 @@ def verify_implementation():
     )
     
     print(f"   ✓ Low OVR player (30) valuation: ${val['suggested_price']:.2f}M")
-    assert val['suggested_price'] <= LOW_OVR_MAX_VALUE, "Low OVR valuation should be capped"
-    print(f"   ✓ Low OVR players properly capped at ${LOW_OVR_MAX_VALUE}M")
+    print(f"   ✓ Valuation determined by score ({val['base_score']}), not forced cap")
     print()
     
     # 3. Verify AI bidding thresholds
@@ -150,8 +144,8 @@ def verify_implementation():
     print()
     print("✅ All core features verified:")
     print("   • Timer-based auction system")
-    print("   • OVR-weighted valuations with thresholds")
-    print("   • AI bidding intelligence with strategy thresholds")
+    print("   • Score-based valuations (user-controlled)")
+    print("   • AI bidding intelligence with OVR strategy thresholds")
     print("   • Player sorting by OVR rating")
     print()
     print("Implementation Status: READY FOR PRODUCTION")

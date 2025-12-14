@@ -16,8 +16,6 @@ from trade_value import POSITION_SCARCITY, AGE_MULTIPLIERS
 
 # Constants for valuation
 TOP_PLAYER_BUDGET_PERCENTAGE = 0.20  # Top player worth 20% of budget
-MIN_OVR_THRESHOLD = 40  # Minimum OVR below which valuations are drastically reduced
-LOW_OVR_MAX_VALUE = 2.0  # Maximum value (in millions) for low OVR players
 
 
 def parse_rating(value) -> float:
@@ -96,15 +94,9 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     # Assuming scores are already in reasonable range, cap at 100
     normalized_score = min(float(base_score), 100.0)
     
-    # Apply minimum OVR threshold - players below MIN_OVR_THRESHOLD get drastically reduced valuations
-    if ovr < MIN_OVR_THRESHOLD:
-        # Low OVR players should be worth ~$1-2M regardless of other factors
-        base_value = (ovr / MIN_OVR_THRESHOLD) * LOW_OVR_MAX_VALUE  # Scale from 0 to LOW_OVR_MAX_VALUE for OVR 0-MIN_OVR_THRESHOLD
-    else:
-        # Base value heavily weighted by OVR for players above threshold
-        # Formula: base_value = (OVR / 100) * base_budget * TOP_PLAYER_BUDGET_PERCENTAGE * position_scarcity * age_multiplier
-        ovr_factor = (ovr / 100.0)
-        base_value = ovr_factor * (base_budget * TOP_PLAYER_BUDGET_PERCENTAGE)
+    # Base value as percentage of budget (score of 100 = TOP_PLAYER_BUDGET_PERCENTAGE of budget)
+    # User controls the valuation through the scoring system, not through OVR caps
+    base_value = (normalized_score / 100.0) * (base_budget * TOP_PLAYER_BUDGET_PERCENTAGE)
     
     # Apply position scarcity
     pos_multiplier = get_position_scarcity(position)
@@ -116,10 +108,6 @@ def calculate_player_valuation(player: Dict, section_weights: Dict,
     
     # Calculate suggested price (conservative estimate)
     suggested_price = max(0.5, age_adjusted)  # Minimum $0.5M
-    
-    # For very low OVR players, cap the suggested price
-    if ovr < MIN_OVR_THRESHOLD:
-        suggested_price = min(suggested_price, LOW_OVR_MAX_VALUE)  # Cap at LOW_OVR_MAX_VALUE for low OVR
     
     # Calculate maximum price (aggressive bidding limit)
     max_price = suggested_price * 1.2
