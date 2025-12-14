@@ -215,7 +215,13 @@ def create_sample_free_agents_csv(output_path: str):
         }
     ]
     
-    fieldnames = list(sample_data[0].keys())
+    # Get all unique fieldnames from all records
+    fieldnames = []
+    for record in sample_data:
+        for key in record.keys():
+            if key not in fieldnames:
+                fieldnames.append(key)
+    
     with open(output_path, 'w', encoding='utf-8', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

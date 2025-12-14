@@ -46,6 +46,7 @@ Rosterlytics adds these major feature categories beyond the original Hector:
 | **Enhanced Contract Parsing** | Support for new OOTP columns: SLR (salary), YL (years left with status), CV (contract value), TY (total years), ECV (extension value), ETY (extension years). |
 | **Extension Watch** | Evaluate pending extensions with grades (Steal 💎, Fair ✅, Risky ⚠️, Overpay 🚨) and red flag detection (age 30+ with long extension, injury concerns, etc.). |
 | **Autocontract Generator** | Generate realistic competing free agent offers with market-derived $/WAR valuations from your league data, 5 team archetypes (Dynasty, Contender, Window Builder, Rebuilding, Tanking), smart age-based contract years, customizable settings (Eye Test Weight, Market Randomness, Hometown Discount), international player support, Lock $/WAR feature, League Scale Multiplier, and OVR-Percentile Valuation option. |
+| **Auction System** | 🆕 IPL-style free agency auction simulator. Run competitive auctions with CSV import/export, manual budgets, Human/AI teams, and three AI strategies (Aggressive, Balanced, Conservative). Integrates Portal's scoring for realistic valuations. [See Full Guide](AUCTION_USER_GUIDE.md) |
 
 ### 🏗️ Roster Building Tools
 
@@ -84,6 +85,7 @@ Rosterlytics adds these major feature categories beyond the original Hector:
 - [Contract Value Tab](#contract-value-tab)
 - [Extension Watch](#extension-watch)
 - [Autocontract Generator](#autocontract-generator)
+- [Auction System](#auction-system)
 - [Platoon Finder Tab](#platoon-finder-tab)
 - [Trade Value Calculator](#trade-value-calculator)
 - [Age Definitions](#age-definitions)
@@ -697,6 +699,97 @@ Generated offers show:
 - **🏠 Hometown offers**: Highlighted in gold with discount percentage
 
 Perfect for simulating free agency in commissioner-controlled leagues or adding realism to single-player careers!
+
+---
+
+## Auction System
+[⬆️ Back to Top](#top)
+
+The **Auction System** enables IPL-style free agency auctions for OOTP leagues. Run competitive auctions where teams bid on free agents with realistic budget constraints and AI strategies.
+
+### Key Features
+
+**CSV Import/Export:**
+- Import free agents from OOTP CSV exports
+- Export results in OOTP-compatible format with contract years and AAV
+- Clean interface requiring only Name, POS, and Age columns (plus ratings/stats)
+
+**Budget Management:**
+- Manual budget configuration per team
+- Minimum spend requirements (default 75%)
+- Roster size limits (18-25 players)
+- Smart budget reserves (leaves $1M per remaining required player)
+
+**Team Control:**
+- Assign teams as Human or AI controlled
+- Mix of human and AI teams supported
+- Control multiple human teams in same auction
+
+**AI Bidding Strategies:**
+
+| Strategy | Behavior | Best For |
+|----------|----------|----------|
+| **Aggressive** | Bids up to 110% of value, targets stars (score ≥60) | Teams going all-in for championship |
+| **Balanced** | Bids up to 95% of value, spreads budget evenly | Competitive, well-rounded builds |
+| **Conservative** | Bids up to 85% of value, focuses on value plays | Budget teams, rebuilding squads |
+
+**Intelligent Valuations:**
+- Uses Portal's existing scoring systems (`batters.py`, `pitchers.py`)
+- Position scarcity multipliers (C, SS, CF get premiums)
+- Age adjustments for future value
+- Suggested starting prices (35% of full value)
+
+**Live Auction Interface:**
+- Real-time bidding controls
+- Team budget dashboard showing remaining budget and roster spots
+- Bid history log
+- Current player display with valuations
+- Progress tracking (players sold/unsold/remaining)
+
+### Quick Start
+
+1. **Export Free Agents**: In OOTP, create a custom view and export as CSV (must include Name, POS, Age)
+2. **Load CSV**: In Rosterlytics Auction tab, click "📁 Load Free Agents CSV"
+3. **Configure Budgets**: Click "💰 Configure Budgets" to set team budgets (default $100M per team)
+4. **Assign Teams**: Click "👥 Assign Teams" to choose Human vs AI control and AI strategies
+5. **Start Auction**: Click "🎯 Start Auction" to begin
+6. **Bidding**: Place bids manually or click "🤖 Process AI Bids" for AI teams
+7. **Export Results**: Click "📤 Export Results CSV" when complete
+8. **Import to OOTP**: Use exported CSV to import signings back into OOTP
+
+### Contract Years
+
+Contract length is automatically calculated based on age and price:
+
+| Age | Price | Years |
+|-----|-------|-------|
+| ≤26 | ≥$20M | 7 |
+| ≤26 | $10-20M | 6 |
+| ≤26 | <$10M | 5 |
+| 27-29 | ≥$20M | 6 |
+| 27-29 | $10-20M | 5 |
+| 27-29 | <$10M | 4 |
+| 30-32 | ≥$15M | 4 |
+| 30-32 | $8-15M | 3 |
+| 30-32 | <$8M | 2 |
+| 33-35 | ≥$10M | 2 |
+| 33-35 | <$10M | 1 |
+| 36+ | Any | 1 |
+
+### Sample Data
+
+A `sample_free_agents.csv` is included for testing with 3 players (SP, C, SS).
+
+### Full Documentation
+
+For comprehensive documentation including:
+- Detailed setup instructions
+- Budget configuration guide
+- AI strategy explanations
+- Troubleshooting tips
+- Advanced features
+
+See **[AUCTION_USER_GUIDE.md](AUCTION_USER_GUIDE.md)**
 
 ---
 
