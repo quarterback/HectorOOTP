@@ -608,18 +608,23 @@ def show_live_auction_ui(data, parent, font):
                                    font=font, padx=5, pady=5)
     history_frame.pack(fill="both", expand=True, pady=5)
     
-    data.bid_history_text = tk.Text(history_frame, height=8, bg="#1a1a1a", fg="#d4d4d4",
+    data.bid_history_text = tk.Text(history_frame, height=15, bg="#1a1a1a", fg="#d4d4d4",
                                     font=font, wrap="word")
     data.bid_history_text.pack(fill="both", expand=True)
     
+    # Configure tags for bid history styling
+    data.bid_history_text.tag_config("human_bid", foreground="#00bfff")  # Light blue for human
+    data.bid_history_text.tag_config("ai_bid", foreground="#ffa500")  # Orange for AI
+    data.bid_history_text.tag_config("high_bidder", foreground=NEON_GREEN, font=(font[0], font[1], "bold"))  # Bold green for current winner
+    
     # ===== RIGHT: Dashboard =====
     dashboard_frame = tk.LabelFrame(right_frame, text="Team Dashboard", bg=DARK_BG, fg=NEON_GREEN,
-                                     font=(font[0], font[1]+2, "bold"), padx=10, pady=10, width=300)
+                                     font=(font[0], font[1]+2, "bold"), padx=10, pady=10, width=400)
     dashboard_frame.pack(fill="both", expand=True, pady=5)
     dashboard_frame.pack_propagate(False)
     
     # Scrollable dashboard
-    canvas = tk.Canvas(dashboard_frame, bg=DARK_BG, highlightthickness=0, width=280)
+    canvas = tk.Canvas(dashboard_frame, bg=DARK_BG, highlightthickness=0, width=380)
     scrollbar = ttk.Scrollbar(dashboard_frame, orient="vertical", command=canvas.yview)
     data.dashboard_frame = tk.Frame(canvas, bg=DARK_BG)
     
@@ -633,6 +638,11 @@ def show_live_auction_ui(data, parent, font):
     
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
+    
+    # Enable mouse wheel scrolling (bound to canvas only)
+    def on_mousewheel(event):
+        canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+    canvas.bind("<MouseWheel>", on_mousewheel)
     
     # Progress info
     progress_frame = tk.LabelFrame(right_frame, text="Progress", bg=DARK_BG, fg=NEON_GREEN,
@@ -739,26 +749,52 @@ def update_team_dashboard(data):
     
     for summary in summaries:
         team = summary['team']
+        remaining = summary['remaining']
+        starting = summary['starting_budget']
+        roster_size = summary['roster_size']
         
-        # Team frame
+        # Calculate budget health percentage
+        budget_percentage = (remaining / starting * 100) if starting > 0 else 0
+        
+        # Determine color based on budget health
+        if budget_percentage > 60:
+            budget_color = NEON_GREEN  # Healthy budget
+        elif budget_percentage > 30:
+            budget_color = "#ffa500"  # Warning (orange)
+        else:
+            budget_color = "#ff4444"  # Critical (red)
+        
+        # Team frame - more compact layout
         team_frame = tk.Frame(data.dashboard_frame, bg="#1a1a1a", relief="ridge", bd=1)
-        team_frame.pack(fill="x", pady=3, padx=2)
+        team_frame.pack(fill="x", pady=2, padx=2)
         
-        # Team name
+        # Top row: Team name and roster
+        top_row = tk.Frame(team_frame, bg="#1a1a1a")
+        top_row.pack(fill="x", padx=5, pady=2)
+        
         is_human = team in data.human_teams
-        team_label = tk.Label(team_frame, text=f"{team} {'👤' if is_human else '🤖'}", 
+        team_label = tk.Label(top_row, text=f"{team} {'👤' if is_human else '🤖'}", 
                              bg="#1a1a1a", fg=NEON_GREEN, font=(data.font[0], data.font[1], "bold"))
-        team_label.pack(anchor="w", padx=5, pady=2)
+        team_label.pack(side="left")
         
-        # Budget info
-        budget_text = f"Budget: {format_price(summary['remaining'])} / {format_price(summary['starting_budget'])}"
-        budget_label = tk.Label(team_frame, text=budget_text, bg="#1a1a1a", fg="#d4d4d4", font=data.font)
-        budget_label.pack(anchor="w", padx=5)
+        roster_label = tk.Label(top_row, text=f"({roster_size} players)", 
+                               bg="#1a1a1a", fg="#888", font=data.font)
+        roster_label.pack(side="right")
         
-        # Roster info
-        roster_text = f"Roster: {summary['roster_size']} players"
-        roster_label = tk.Label(team_frame, text=roster_text, bg="#1a1a1a", fg="#d4d4d4", font=data.font)
-        roster_label.pack(anchor="w", padx=5, pady=(0, 5))
+        # Bottom row: Budget info with color coding
+        budget_row = tk.Frame(team_frame, bg="#1a1a1a")
+        budget_row.pack(fill="x", padx=5, pady=(0, 3))
+        
+        budget_text = f"{format_price(remaining)} / {format_price(starting)}"
+        budget_label = tk.Label(budget_row, text=budget_text, 
+                               bg="#1a1a1a", fg=budget_color, font=data.font)
+        budget_label.pack(side="left")
+        
+        # Budget percentage indicator
+        percentage_text = f"({budget_percentage:.0f}%)"
+        percentage_label = tk.Label(budget_row, text=percentage_text, 
+                                   bg="#1a1a1a", fg=budget_color, font=data.font)
+        percentage_label.pack(side="right")
 
 
 def place_human_bid(data):
@@ -814,10 +850,25 @@ def pass_player(data):
 
 def on_bid_placed(data, bid, player):
     """Callback when bid is placed"""
-    # Update bid history display
-    msg = f"{bid.team} bids {format_price(bid.amount)}"
+    # Update bid history display with color coding
+    bid_type_icon = "👤" if bid.bid_type == BidType.HUMAN else "🤖"
+    msg = f"{bid_type_icon} {bid.team} bids {format_price(bid.amount)}"
+    
     if hasattr(data, 'bid_history_text'):
-        data.bid_history_text.insert('1.0', msg + "\n")
+        # Determine if this is the current high bidder
+        is_high_bidder = (data.auction_engine.current_high_bidder == bid.team)
+        
+        # Choose tag based on bid type and whether they're the high bidder
+        if is_high_bidder:
+            tag = "high_bidder"
+        elif bid.bid_type == BidType.HUMAN:
+            tag = "human_bid"
+        else:
+            tag = "ai_bid"
+        
+        # Insert at the top with appropriate tag (message without newline)
+        data.bid_history_text.insert('1.0', msg, tag)
+        data.bid_history_text.insert('1.0', "\n")
 
 
 def on_player_sold(data, result):
