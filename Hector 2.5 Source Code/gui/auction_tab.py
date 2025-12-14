@@ -591,10 +591,6 @@ def show_live_auction_ui(data, parent, font):
     action_frame = tk.Frame(player_frame, bg=DARK_BG)
     action_frame.pack(pady=10)
     
-    data.process_ai_btn = ttk.Button(action_frame, text="🤖 Process AI Bids",
-                                     command=lambda: process_ai_bids(data))
-    data.process_ai_btn.pack(side="left", padx=5)
-    
     data.sell_btn = ttk.Button(action_frame, text="✓ Sell Player",
                                command=lambda: sell_player(data))
     data.sell_btn.pack(side="left", padx=5)
