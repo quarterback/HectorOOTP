@@ -44,12 +44,19 @@ def import_draft_csv(csv_path: str) -> Dict[str, str]:
     team_id_map = {}
     
     with open(csv_path, 'r', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
+        reader = csv.reader(f)
         for row in reader:
-            team_name = row.get('Team Name', '').strip()
-            team_id = row.get('Team ID', '').strip()
-            if team_name and team_id:
-                team_id_map[team_name] = team_id
+            # Skip empty rows or comment lines
+            if not row or row[0].startswith('//'):
+                continue
+            
+            # Only process Round 1 picks (column 0 = '1')
+            # This ensures we get each team exactly once
+            if len(row) >= 5 and row[0] == '1':
+                team_name = row[3].strip()
+                team_id = row[4].strip()
+                if team_name and team_id:
+                    team_id_map[team_name] = team_id
     
     return team_id_map
 
@@ -205,6 +212,7 @@ def validate_csv_format(csv_path: str) -> Tuple[bool, Optional[str], List[str]]:
 def validate_draft_csv_format(csv_path: str) -> Tuple[bool, Optional[str], List[str]]:
     """
     Validate that draft CSV has required fields for team mapping.
+    Supports both OOTP format (comment line, no headers) and header format.
     
     Returns:
         (is_valid, error_message, available_fields)
@@ -213,17 +221,36 @@ def validate_draft_csv_format(csv_path: str) -> Tuple[bool, Optional[str], List[
     
     try:
         with open(csv_path, 'r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            fieldnames = [field.strip() for field in reader.fieldnames] if reader.fieldnames else []
+            # Read first line to check format
+            first_line = f.readline().strip()
+            f.seek(0)  # Reset to start
             
-            if not fieldnames:
-                return False, "CSV file has no headers", []
-            
-            missing_fields = required_fields - set(fieldnames)
-            if missing_fields:
-                return False, f"Missing required fields: {', '.join(missing_fields)}", fieldnames
-            
-            return True, None, fieldnames
+            # Check if it's OOTP format (starts with comment)
+            if first_line.startswith('//'):
+                # OOTP format - validate by checking if we have data rows with at least 5 columns
+                reader = csv.reader(f)
+                for row in reader:
+                    if not row or row[0].startswith('//'):
+                        continue
+                    # Found a data row - check if it has enough columns
+                    if len(row) >= 5:
+                        return True, None, ['Draft Round', 'Supplemental', 'Pick in Round', 'Team Name', 'Team ID', 'Player ID']
+                    else:
+                        return False, "Data rows do not have enough columns (expected at least 5)", []
+                return False, "No data rows found in CSV", []
+            else:
+                # Header format - use original validation logic
+                reader = csv.DictReader(f)
+                fieldnames = [field.strip() for field in reader.fieldnames] if reader.fieldnames else []
+                
+                if not fieldnames:
+                    return False, "CSV file has no headers", []
+                
+                missing_fields = required_fields - set(fieldnames)
+                if missing_fields:
+                    return False, f"Missing required fields: {', '.join(missing_fields)}", fieldnames
+                
+                return True, None, fieldnames
             
     except Exception as e:
         return False, f"Error reading CSV: {str(e)}", []
