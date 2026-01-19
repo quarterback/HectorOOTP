@@ -1125,6 +1125,7 @@ try:
                         OwnerInvestmentCalculator.FIRE_SALE_MIN,
                         OwnerInvestmentCalculator.FIRE_SALE_MAX
                     )
+                    st.rerun()  # Force UI update when fire sale % changes
                 
                 fire_sale_pct = st.session_state.fire_sale_pct
                 st.error(f"Owner Reduction: {fire_sale_pct:.1%} (Random: 51-77%)")
@@ -1159,8 +1160,8 @@ try:
         with col1:
             scenario_budget_space = st.number_input(
                 "OOTP Budget Space ($M)",
-                min_value=-50.0,
-                max_value=100.0,
+                min_value=-1000.0,
+                max_value=10000.0,
                 value=float(selected_team['budget_space']/1e6),
                 step=0.1,
                 help="Can be negative if over budget"
@@ -1169,8 +1170,8 @@ try:
         with col2:
             scenario_trade_cash = st.number_input(
                 "Cash from Trades ($M)",
-                min_value=0.0,
-                max_value=100.0,
+                min_value=-1000.0,
+                max_value=10000.0,
                 value=float(selected_team['cash_from_trades']/1e6),
                 step=0.1,
                 help="Cash received in trades"
@@ -1179,12 +1180,42 @@ try:
         with col3:
             scenario_custom_bonus = st.number_input(
                 "Custom Bonus ($M)",
-                min_value=-50.0,
-                max_value=100.0,
+                min_value=-1000.0,
+                max_value=10000.0,
                 value=0.0,
                 step=0.1,
                 help="Additional custom adjustment"
             ) * 1e6
+        
+        st.markdown("---")
+        
+        # New section for Playoff Bonuses & Obligations
+        st.markdown("**📊 Playoff Bonuses & Other Adjustments**")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            scenario_playoff_bonus = st.number_input(
+                "Playoff Bonus Revenue ($M)",
+                min_value=0.0,
+                max_value=10000.0,
+                value=0.0,
+                step=0.1,
+                help="Extra money from postseason ticket sales, merchandise, etc."
+            ) * 1e6
+        
+        with col2:
+            scenario_obligations = st.number_input(
+                "Other Obligations ($M)",
+                min_value=0.0,
+                max_value=10000.0,
+                value=0.0,
+                step=0.1,
+                help="Subtract money for commitments not in OOTP (facility debt, deferred payments, etc.)"
+            ) * 1e6
+        
+        if scenario_playoff_bonus > 0 or scenario_obligations > 0:
+            net_adjustment = scenario_playoff_bonus - scenario_obligations
+            st.info(f"Net Adjustment: ${net_adjustment/1e6:+.1f}M")
         
         st.markdown("---")
         
@@ -1210,7 +1241,9 @@ try:
         
         # Calculate total
         base_available = selected_team['budget'] - selected_team['payroll']
-        total_budget = base_available + scenario_budget_space + scenario_trade_cash + scenario_calc['final_investment'] + scenario_custom_bonus
+        total_budget = (base_available + scenario_budget_space + scenario_trade_cash + 
+                       scenario_calc['final_investment'] + scenario_playoff_bonus - 
+                       scenario_obligations + scenario_custom_bonus)
         
         # Large display
         col1, col2, col3 = st.columns(3)
@@ -1220,12 +1253,16 @@ try:
         
         # Breakdown table
         breakdown_data = {
-            'Source': ['Base Available', 'OOTP Budget Space', 'Cash from Trades', 'Owner Investment', 'Custom Bonus', '**TOTAL**'],
+            'Source': ['Base Available', 'OOTP Budget Space', 'Cash from Trades', 
+                      'Owner Investment', 'Playoff Bonus', 'Obligations', 
+                      'Custom Bonus', '**TOTAL**'],
             'Amount': [
                 f"${base_available/1e6:.1f}M",
                 f"${scenario_budget_space/1e6:.1f}M",
                 f"${scenario_trade_cash/1e6:.1f}M",
                 f"${scenario_calc['final_investment']/1e6:.1f}M",
+                f"${scenario_playoff_bonus/1e6:.1f}M",
+                f"-${scenario_obligations/1e6:.1f}M",
                 f"${scenario_custom_bonus/1e6:.1f}M",
                 f"**${total_budget/1e6:.1f}M**"
             ]
@@ -1389,7 +1426,9 @@ try:
                     fire_sale=False
                 )
             
-            total = base_available + scenario_budget_space + scenario_trade_cash + calc['final_investment'] + scenario_custom_bonus
+            total = (base_available + scenario_budget_space + scenario_trade_cash + 
+                    calc['final_investment'] + scenario_playoff_bonus - 
+                    scenario_obligations + scenario_custom_bonus)
             
             scenario_comparisons.append({
                 'Scenario': scenario_name,
