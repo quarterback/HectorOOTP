@@ -154,12 +154,10 @@ class MarketAnalyzer:
         return pd.DataFrame(stats)
     
     def _calculate_team_stats(self) -> pd.DataFrame:
-        """Calculate team spending and roster statistics"""
+        """Calculate team financial statistics from TeamFin.html data"""
         stats = []
         
         for _, team in self.teams.iterrows():
-            team_players = self.signed[self.signed['team'] == team['team_name']]
-            
             stat_dict = {
                 'team_name': team['team_name'],
                 'abbr': team['abbr'],
@@ -167,22 +165,7 @@ class MarketAnalyzer:
                 'budget': team['budget'],
                 'available_for_fa': team['available_for_fa'],
                 'budget_utilization': (team['payroll'] / team['budget']) * 100 if team['budget'] > 0 else 0,
-                'roster_size': len(team_players),
-                'avg_player_salary': 0,
-                'median_player_salary': 0,
-                'highest_paid': 0,
-                'avg_player_overall': 0,
-                'elite_players': 0,
             }
-            
-            if len(team_players) > 0:
-                stat_dict['avg_player_salary'] = team_players['salary'].mean()
-                stat_dict['median_player_salary'] = team_players['salary'].median()
-                stat_dict['highest_paid'] = team_players['salary'].max()
-                stat_dict['avg_player_overall'] = team_players['overall'].mean()
-                
-                # Count elite players (4.0+ stars)
-                stat_dict['elite_players'] = len(team_players[team_players['overall'] >= 4.0])
             
             stats.append(stat_dict)
         
@@ -545,4 +528,4 @@ if __name__ == "__main__":
     print("💵 TOP SPENDING TEAMS")
     print("="*80)
     top_teams = analyzer.get_team_market_summary().head(10)
-    print(top_teams[['team_name', 'payroll', 'budget', 'available_for_fa', 'roster_size', 'elite_players']].to_string(index=False))
+    print(top_teams[['team_name', 'payroll', 'budget', 'available_for_fa', 'budget_utilization']].to_string(index=False))
