@@ -6,6 +6,168 @@ Analyzes salary market dynamics across positions, teams, and player tiers
 import pandas as pd
 import numpy as np
 from typing import Dict, Tuple, List
+import random
+
+class OwnerInvestmentCalculator:
+    """Calculate owner investment based on team performance, mode, and fan interest"""
+    
+    # Fire sale percentage range (random reduction)
+    FIRE_SALE_MIN = 0.51  # 51% minimum reduction
+    FIRE_SALE_MAX = 0.77  # 77% maximum reduction
+    
+    # Maximum possible aggressiveness score calculation
+    MAX_PERFORMANCE_FACTOR = 0.5
+    MAX_MODE_FACTOR = 1.0
+    MAX_INTEREST_FACTOR = 1.2
+    MAX_COMBINED_FACTOR = MAX_PERFORMANCE_FACTOR * MAX_MODE_FACTOR * MAX_INTEREST_FACTOR  # = 0.6
+    
+    @staticmethod
+    def calculate_performance_factor(win_pct: float) -> float:
+        """Calculate performance factor based on last year's win percentage
+        
+        Win % Range -> Factor:
+        >0.617 (>100 wins) -> 50%
+        0.580-0.617 (94-100) -> 40%
+        0.543-0.580 (88-94) -> 30%
+        0.506-0.543 (82-88) -> 20%
+        0.469-0.506 (76-82) -> 15%
+        0.432-0.469 (70-76) -> 10%
+        <0.432 (<70 wins) -> 5%
+        """
+        if win_pct > 0.617:
+            return 0.50
+        elif win_pct >= 0.580:
+            return 0.40
+        elif win_pct >= 0.543:
+            return 0.30
+        elif win_pct >= 0.506:
+            return 0.20
+        elif win_pct >= 0.469:
+            return 0.15
+        elif win_pct >= 0.432:
+            return 0.10
+        else:
+            return 0.05
+    
+    @staticmethod
+    def calculate_mode_factor(mode: str) -> float:
+        """Calculate mode factor based on team strategy
+        
+        Win Now! -> 100%
+        Build a Dynasty! -> 75%
+        Neutral -> 50%
+        Rebuilding -> 10%
+        """
+        mode_lower = mode.lower().strip()
+        if 'win now' in mode_lower:
+            return 1.00
+        elif 'dynasty' in mode_lower:
+            return 0.75
+        elif 'neutral' in mode_lower:
+            return 0.50
+        elif 'rebuild' in mode_lower:
+            return 0.10
+        else:
+            return 0.50  # Default to neutral
+    
+    @staticmethod
+    def calculate_interest_factor(fan_interest: int) -> float:
+        """Calculate interest factor based on fan interest (0-100)
+        
+        90-100 -> 120%
+        75-89 -> 110%
+        60-74 -> 100%
+        45-59 -> 90%
+        30-44 -> 85%
+        <30 -> 80%
+        """
+        if fan_interest >= 90:
+            return 1.20
+        elif fan_interest >= 75:
+            return 1.10
+        elif fan_interest >= 60:
+            return 1.00
+        elif fan_interest >= 45:
+            return 0.90
+        elif fan_interest >= 30:
+            return 0.85
+        else:
+            return 0.80
+    
+    @staticmethod
+    def calculate_owner_investment(budget: float, win_pct: float, mode: str, 
+                                  fan_interest: int, postseason_bonus: float = 0.0,
+                                  fire_sale: bool = False) -> Dict:
+        """Calculate owner investment with detailed breakdown
+        
+        Args:
+            budget: Team's base budget
+            win_pct: Last year's win percentage
+            mode: Team mode (Win Now, Dynasty, Neutral, Rebuilding)
+            fan_interest: Fan interest rating (0-100)
+            postseason_bonus: Postseason bonus multiplier (0.15 for WC, 0.25 for Division, etc.)
+            fire_sale: Whether this is a fire sale scenario
+        
+        Returns:
+            Dictionary with detailed breakdown
+        """
+        perf_factor = OwnerInvestmentCalculator.calculate_performance_factor(win_pct)
+        mode_factor = OwnerInvestmentCalculator.calculate_mode_factor(mode)
+        interest_factor = OwnerInvestmentCalculator.calculate_interest_factor(fan_interest)
+        
+        # Base owner investment
+        base_investment = budget * perf_factor * mode_factor * interest_factor
+        
+        # Apply postseason bonus
+        scenario_multiplier = 1.0 + postseason_bonus
+        final_investment = base_investment * scenario_multiplier
+        
+        # Fire sale: random reduction of 51-77%
+        fire_sale_reduction = 0.0
+        owner_pocketed = 0.0
+        if fire_sale:
+            fire_sale_pct = random.uniform(
+                OwnerInvestmentCalculator.FIRE_SALE_MIN, 
+                OwnerInvestmentCalculator.FIRE_SALE_MAX
+            )
+            fire_sale_reduction = fire_sale_pct
+            owner_pocketed = final_investment * fire_sale_pct
+            final_investment = final_investment * (1 - fire_sale_pct)
+        
+        return {
+            'performance_factor': perf_factor,
+            'mode_factor': mode_factor,
+            'interest_factor': interest_factor,
+            'base_investment': base_investment,
+            'postseason_bonus': postseason_bonus,
+            'scenario_multiplier': scenario_multiplier,
+            'fire_sale': fire_sale,
+            'fire_sale_reduction': fire_sale_reduction,
+            'owner_pocketed': owner_pocketed,
+            'final_investment': final_investment,
+        }
+    
+    @staticmethod
+    def calculate_total_fa_budget(budget: float, payroll: float, budget_space: float,
+                                  cash_from_trades: float, owner_investment: float) -> float:
+        """Calculate total FA budget
+        
+        Total FA Budget = (Budget - Payroll) + BgtSpc + CT + Owner Investment
+        """
+        base_available = budget - payroll
+        total = base_available + budget_space + cash_from_trades + owner_investment
+        return total
+    
+    @staticmethod
+    def calculate_aggressiveness_score(performance_factor: float, mode_factor: float, 
+                                      interest_factor: float) -> float:
+        """Calculate owner aggressiveness score (0-100)
+        
+        Combines all factors into a single 0-100 score
+        """
+        combined = performance_factor * mode_factor * interest_factor
+        score = (combined / OwnerInvestmentCalculator.MAX_COMBINED_FACTOR) * 100
+        return min(100, max(0, score))
 
 class MarketAnalyzer:
     """Analyze salary market dynamics across the league"""
@@ -154,17 +316,59 @@ class MarketAnalyzer:
         return pd.DataFrame(stats)
     
     def _calculate_team_stats(self) -> pd.DataFrame:
-        """Calculate team financial statistics from TeamFin.html data"""
+        """Calculate team financial statistics from TeamFin.html data with owner investment"""
         stats = []
         
         for _, team in self.teams.iterrows():
+            # Calculate owner investment
+            investment_calc = OwnerInvestmentCalculator.calculate_owner_investment(
+                budget=team.get('budget', 100000000.0),
+                win_pct=team.get('win_pct', 0.500),
+                mode=team.get('mode', 'Neutral'),
+                fan_interest=team.get('fan_interest', 50)
+            )
+            
+            # Calculate total FA budget
+            total_fa_budget = OwnerInvestmentCalculator.calculate_total_fa_budget(
+                budget=team.get('budget', 100000000.0),
+                payroll=team.get('payroll', 0.0),
+                budget_space=team.get('budget_space', 0.0),
+                cash_from_trades=team.get('cash_from_trades', 0.0),
+                owner_investment=investment_calc['final_investment']
+            )
+            
+            # Calculate aggressiveness score
+            aggressiveness = OwnerInvestmentCalculator.calculate_aggressiveness_score(
+                investment_calc['performance_factor'],
+                investment_calc['mode_factor'],
+                investment_calc['interest_factor']
+            )
+            
             stat_dict = {
-                'team_name': team['team_name'],
-                'abbr': team['abbr'],
-                'payroll': team['payroll'],
-                'budget': team['budget'],
-                'available_for_fa': team['available_for_fa'],
-                'budget_utilization': (team['payroll'] / team['budget']) * 100 if team['budget'] > 0 else 0,
+                'team_name': team.get('team_name', ''),
+                'team_city': team.get('team_city', ''),
+                'abbr': team.get('abbr', ''),
+                'payroll': team.get('payroll', 0.0),
+                'budget': team.get('budget', 100000000.0),
+                'budget_space': team.get('budget_space', 0.0),
+                'cash_from_trades': team.get('cash_from_trades', 0.0),
+                'ticket_price': team.get('ticket_price', 0.0),
+                'fan_interest': team.get('fan_interest', 50),
+                'mode': team.get('mode', 'Neutral'),
+                'revenue': team.get('revenue', 0.0),
+                'expenses': team.get('expenses', 0.0),
+                'last_year_wins': team.get('last_year_wins', 0),
+                'last_year_losses': team.get('last_year_losses', 0),
+                'win_pct': team.get('win_pct', 0.500),
+                'performance_factor': investment_calc['performance_factor'],
+                'mode_factor': investment_calc['mode_factor'],
+                'interest_factor': investment_calc['interest_factor'],
+                'owner_investment': investment_calc['final_investment'],
+                'base_fa_budget': team.get('budget', 100000000.0) - team.get('payroll', 0.0),
+                'total_fa_budget': total_fa_budget,
+                'aggressiveness_score': aggressiveness,
+                'available_for_fa': team.get('available_for_fa', 0.0),
+                'budget_utilization': (team.get('payroll', 0.0) / team.get('budget', 100000000.0)) * 100 if team.get('budget', 100000000.0) > 0 else 0,
             }
             
             stats.append(stat_dict)

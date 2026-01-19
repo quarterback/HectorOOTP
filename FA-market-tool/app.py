@@ -7,8 +7,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from market_engine import MarketAnalyzer
+import random
+from market_engine import MarketAnalyzer, OwnerInvestmentCalculator
 from parser import OOTPParser
+
+# Win percentage tier bins for heatmap visualization
+WIN_PCT_BINS = [0, 0.432, 0.469, 0.506, 0.543, 0.580, 0.617, 1.0]
+WIN_PCT_LABELS = ['<70W', '70-76W', '76-82W', '82-88W', '88-94W', '94-100W', '>100W']
 
 st.set_page_config(page_title="OOTP Market Analyzer", layout="wide", page_icon="⚾")
 
@@ -31,14 +36,15 @@ try:
     st.markdown("### Understanding League-Wide Salary Dynamics")
     
     # Tab Navigation
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
         "📊 Market Overview",
         "💰 Salary Bands",
         "🎯 Player Pricer",
         "📍 Position Analysis",
         "⭐ Tier Analysis",
         "🏢 Team Analysis",
-        "🔍 Player Lookup"
+        "🔍 Player Lookup",
+        "🎯 Budget Scenarios"
     ])
     
     # ========== TAB 1: MARKET OVERVIEW ==========
@@ -731,48 +737,237 @@ try:
     
     # ========== TAB 6: TEAM ANALYSIS ==========
     with tab6:
-        st.header("Team Spending Analysis")
+        st.header("🏢 Team Spending & Owner Investment Analysis")
         
         team_stats = analyzer.get_team_market_summary()
         
-        # Team filters
-        col1, col2 = st.columns(2)
+        # Team filters and controls
+        col1, col2, col3 = st.columns(3)
         with col1:
             sort_by = st.selectbox(
                 "Sort by",
-                ['payroll', 'available_for_fa', 'budget_utilization'],
-                index=0
+                ['total_fa_budget', 'owner_investment', 'aggressiveness_score', 'payroll', 
+                 'available_for_fa', 'budget_utilization', 'win_pct', 'fan_interest'],
+                index=0,
+                help="Choose metric to sort teams by"
             )
         with col2:
             ascending = st.checkbox("Ascending order", value=False)
         
-        sorted_teams = team_stats.sort_values(sort_by, ascending=ascending).head(20)
+        with col3:
+            # Configurable slider for number of teams to display
+            num_teams = st.slider(
+                "Number of teams to display",
+                min_value=10,
+                max_value=len(team_stats),
+                value=min(20, len(team_stats)),
+                step=1,
+                help="Control how many teams are shown in charts and tables"
+            )
         
-        # Top spenders visualization
-        st.subheader(f"Teams by {sort_by.replace('_', ' ').title()}")
+        sorted_teams = team_stats.sort_values(sort_by, ascending=ascending).head(num_teams)
         
-        fig = px.bar(
-            sorted_teams.head(15),
-            x='team_name',
-            y=sort_by,
-            color='budget_utilization',
-            title=f"Top Teams by {sort_by.replace('_', ' ').title()}",
-            labels={sort_by: sort_by.replace('_', ' ').title(), 'team_name': 'Team'},
-            color_continuous_scale='RdYlGn_r'
+        # Key Metrics Overview
+        st.subheader("League Overview")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Teams", f"{len(team_stats)}")
+        col2.metric("Total Owner Investment", f"${team_stats['owner_investment'].sum()/1e6:.1f}M")
+        col3.metric("Total FA Budget Available", f"${team_stats['total_fa_budget'].sum()/1e6:.1f}M")
+        col4.metric("Avg Aggressiveness", f"{team_stats['aggressiveness_score'].mean():.1f}/100")
+        
+        # Main visualization
+        st.subheader(f"Top {num_teams} Teams by {sort_by.replace('_', ' ').title()}")
+        
+        # Stacked bar chart for Total FA Budget breakdown
+        if sort_by == 'total_fa_budget' or sort_by == 'owner_investment':
+            st.markdown("**Total FA Budget Breakdown**")
+            fig = go.Figure()
+            
+            # Create stacked bars
+            fig.add_trace(go.Bar(
+                name='Base Available',
+                x=sorted_teams['team_name'],
+                y=sorted_teams['base_fa_budget'],
+                marker_color='lightblue'
+            ))
+            fig.add_trace(go.Bar(
+                name='OOTP Budget Space',
+                x=sorted_teams['team_name'],
+                y=sorted_teams['budget_space'],
+                marker_color='lightgreen'
+            ))
+            fig.add_trace(go.Bar(
+                name='Trade Cash',
+                x=sorted_teams['team_name'],
+                y=sorted_teams['cash_from_trades'],
+                marker_color='lightyellow'
+            ))
+            fig.add_trace(go.Bar(
+                name='Owner Investment',
+                x=sorted_teams['team_name'],
+                y=sorted_teams['owner_investment'],
+                marker_color='gold'
+            ))
+            
+            fig.update_layout(
+                barmode='stack',
+                title=f"Total FA Budget Breakdown - Top {num_teams} Teams",
+                xaxis_title="Team",
+                yaxis_title="Amount ($)",
+                height=500,
+                xaxis_tickangle=-45
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            # Regular bar chart for other metrics
+            fig = px.bar(
+                sorted_teams,
+                x='team_name',
+                y=sort_by,
+                color='aggressiveness_score',
+                title=f"Top {num_teams} Teams by {sort_by.replace('_', ' ').title()}",
+                labels={sort_by: sort_by.replace('_', ' ').title(), 'team_name': 'Team'},
+                color_continuous_scale='RdYlGn',
+                hover_data=['mode', 'win_pct', 'fan_interest']
+            )
+            fig.update_layout(height=500, xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Scatter plot: Win % vs Owner Investment (colored by mode)
+        st.subheader("Win % vs Owner Investment")
+        
+        # Create mode color mapping
+        mode_colors = {
+            'Win Now!': '#FFD700',  # Gold
+            'Build a Dynasty!': '#4169E1',  # Royal Blue
+            'Neutral': '#808080',  # Gray
+            'Rebuilding': '#A9A9A9'  # Dark Gray
+        }
+        
+        fig = px.scatter(
+            sorted_teams,
+            x='win_pct',
+            y='owner_investment',
+            color='mode',
+            size='fan_interest',
+            hover_data=['team_name', 'aggressiveness_score', 'total_fa_budget'],
+            title=f"Win % vs Owner Investment (Top {num_teams} Teams)",
+            labels={'win_pct': 'Win %', 'owner_investment': 'Owner Investment ($)', 'fan_interest': 'Fan Interest'},
+            color_discrete_map=mode_colors
         )
-        fig.update_layout(height=400, xaxis_tickangle=-45)
+        fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
         
-        # Team details table
+        # Heatmap: Performance Factor × Mode Factor
+        st.subheader("Team Strategy Heatmap")
+        st.markdown("Shows relationship between performance (win %) and team mode")
+        
+        # Create pivot table for heatmap
+        heatmap_data = sorted_teams.pivot_table(
+            values='aggressiveness_score',
+            index='mode',
+            columns=pd.cut(sorted_teams['win_pct'], bins=WIN_PCT_BINS, labels=WIN_PCT_LABELS),
+            aggfunc='mean'
+        )
+        
+        if not heatmap_data.empty:
+            fig = px.imshow(
+                heatmap_data,
+                labels=dict(x="Win Tier", y="Team Mode", color="Avg Aggressiveness"),
+                title="Average Aggressiveness Score by Mode and Performance",
+                color_continuous_scale='RdYlGn',
+                aspect='auto'
+            )
+            fig.update_layout(height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Team details table with all new columns
         st.subheader("Team Financial Details")
-        display_cols = ['team_name', 'payroll', 'budget', 'available_for_fa', 'budget_utilization']
+        
+        # Select columns to display
+        display_cols = [
+            'team_name', 'mode', 'last_year_wins', 'last_year_losses', 'win_pct',
+            'fan_interest', 'payroll', 'budget', 'budget_space', 'cash_from_trades',
+            'performance_factor', 'mode_factor', 'interest_factor',
+            'owner_investment', 'base_fa_budget', 'total_fa_budget', 'aggressiveness_score'
+        ]
         
         team_display = sorted_teams[display_cols].copy()
-        for col in ['payroll', 'budget', 'available_for_fa']:
-            team_display[col] = team_display[col].apply(lambda x: f"${x/1e6:.1f}M")
-        team_display['budget_utilization'] = team_display['budget_utilization'].apply(lambda x: f"{x:.1f}%")
         
-        st.dataframe(team_display, use_container_width=True, height=400)
+        # Format columns
+        team_display['last_year_record'] = team_display.apply(
+            lambda x: f"{x['last_year_wins']}-{x['last_year_losses']}", axis=1
+        )
+        team_display['win_pct'] = team_display['win_pct'].apply(lambda x: f"{x:.3f}")
+        team_display['performance_factor'] = team_display['performance_factor'].apply(lambda x: f"{x:.0%}")
+        team_display['mode_factor'] = team_display['mode_factor'].apply(lambda x: f"{x:.0%}")
+        team_display['interest_factor'] = team_display['interest_factor'].apply(lambda x: f"{x:.0%}")
+        
+        for col in ['payroll', 'budget', 'budget_space', 'cash_from_trades', 'owner_investment', 'base_fa_budget', 'total_fa_budget']:
+            team_display[col] = team_display[col].apply(lambda x: f"${x/1e6:.1f}M")
+        
+        team_display['aggressiveness_score'] = team_display['aggressiveness_score'].apply(lambda x: f"{x:.1f}")
+        
+        # Reorder columns for display
+        final_display = team_display[[
+            'team_name', 'mode', 'last_year_record', 'win_pct', 'fan_interest',
+            'performance_factor', 'mode_factor', 'interest_factor',
+            'payroll', 'budget', 'budget_space', 'cash_from_trades',
+            'owner_investment', 'total_fa_budget', 'aggressiveness_score'
+        ]]
+        
+        # Add visual indicators using color styling
+        def color_aggressiveness(val):
+            """Color code aggressiveness scores"""
+            if isinstance(val, str):
+                try:
+                    num_val = float(val)
+                    if num_val >= 80:
+                        return 'background-color: #90EE90'  # Light green
+                    elif num_val >= 50:
+                        return 'background-color: #FFFFE0'  # Light yellow
+                    elif num_val >= 20:
+                        return 'background-color: #FFE4B5'  # Moccasin
+                    else:
+                        return 'background-color: #FFB6C1'  # Light pink
+                except:
+                    pass
+            return ''
+        
+        def color_budget_space(val):
+            """Highlight negative budget space"""
+            if isinstance(val, str) and '-' in val:
+                return 'background-color: #FFB6C1; font-weight: bold'  # Light pink
+            return ''
+        
+        # Apply styling
+        styled_display = final_display.style.applymap(
+            color_aggressiveness, subset=['aggressiveness_score']
+        ).applymap(
+            color_budget_space, subset=['budget_space']
+        )
+        
+        st.dataframe(styled_display, use_container_width=True, height=500)
+        
+        # Add explanatory notes
+        with st.expander("📖 Column Explanations"):
+            st.markdown("""
+            - **Mode**: Team strategy (Win Now!, Dynasty, Neutral, Rebuilding)
+            - **Performance Factor**: Based on last year's win % (5%-50%)
+            - **Mode Factor**: Multiplier based on team strategy (10%-100%)
+            - **Interest Factor**: Based on fan interest (80%-120%)
+            - **Owner Investment**: Budget × Performance × Mode × Interest
+            - **Budget Space**: OOTP-calculated space (can be negative if over budget!)
+            - **Total FA Budget**: Base + Budget Space + Trade Cash + Owner Investment
+            - **Aggressiveness Score**: 0-100 score combining all factors
+            
+            **Color Coding:**
+            - 🟢 Green (80-100): Very aggressive owners
+            - 🟡 Yellow (50-79): Moderately aggressive
+            - 🟠 Orange (20-49): Conservative
+            - 🔴 Pink (<20): Very conservative
+            - ⚠️ Pink budget space: Team is over budget!
+            """)
         
         # Export
         csv = sorted_teams.to_csv(index=False)
@@ -832,6 +1027,466 @@ try:
             )
         else:
             st.info("No players found matching your criteria.")
+    
+    # ========== TAB 8: BUDGET SCENARIOS ==========
+    with tab8:
+        st.header("🎯 Budget Scenario Calculator")
+        st.markdown("Model different scenarios and calculate owner investment under various conditions")
+        
+        # Team Selection Panel
+        st.subheader("Team Selection")
+        
+        team_list = sorted(team_stats['team_name'].tolist())
+        selected_team_name = st.selectbox(
+            "Select Team",
+            team_list,
+            help="Choose a team to analyze"
+        )
+        
+        # Get selected team data
+        selected_team = team_stats[team_stats['team_name'] == selected_team_name].iloc[0]
+        
+        # Display current team stats
+        st.markdown(f"**Current Team Stats for {selected_team_name}:**")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Payroll", f"${selected_team['payroll']/1e6:.1f}M")
+        col2.metric("Budget", f"${selected_team['budget']/1e6:.1f}M")
+        col3.metric("Mode", selected_team['mode'])
+        col4.metric("Fan Interest", f"{selected_team['fan_interest']}/100")
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Last Year Record", f"{selected_team['last_year_wins']}-{selected_team['last_year_losses']}")
+        col2.metric("Win %", f"{selected_team['win_pct']:.3f}")
+        col3.metric("Current Owner Investment", f"${selected_team['owner_investment']/1e6:.1f}M")
+        
+        st.markdown("---")
+        
+        # Scenario Configuration
+        st.subheader("Scenario Configuration")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Last Season Performance**")
+            scenario_wins = st.number_input(
+                "Wins",
+                min_value=0,
+                max_value=162,
+                value=int(selected_team['last_year_wins']),
+                help="Number of wins in the scenario"
+            )
+            scenario_losses = st.number_input(
+                "Losses",
+                min_value=0,
+                max_value=162,
+                value=int(selected_team['last_year_losses']),
+                help="Number of losses in the scenario"
+            )
+            
+            scenario_win_pct = scenario_wins / (scenario_wins + scenario_losses) if (scenario_wins + scenario_losses) > 0 else 0.500
+            st.metric("Win %", f"{scenario_win_pct:.3f}")
+        
+        with col2:
+            st.markdown("**Postseason Result**")
+            postseason_options = {
+                "No Playoffs": 0.0,
+                "Wild Card Team": 0.15,
+                "Division Champion": 0.25,
+                "Pennant Winner": 0.35,
+                "World Series Champion": 0.50,
+                "🔥 FIRE SALE": -1.0  # Special flag
+            }
+            
+            postseason_result = st.radio(
+                "Select postseason outcome",
+                list(postseason_options.keys()),
+                index=0,
+                help="Postseason success adds bonus to owner investment"
+            )
+            
+            postseason_bonus = postseason_options[postseason_result]
+            
+            # Fire sale configuration
+            if postseason_result == "🔥 FIRE SALE":
+                st.warning("⚠️ Fire Sale Mode: Owner will pocket significant funds")
+                fire_sale_enabled = True
+                
+                # Allow regeneration of fire sale percentage
+                if 'fire_sale_pct' not in st.session_state or st.button("🎲 Re-randomize Fire Sale %"):
+                    st.session_state.fire_sale_pct = random.uniform(
+                        OwnerInvestmentCalculator.FIRE_SALE_MIN,
+                        OwnerInvestmentCalculator.FIRE_SALE_MAX
+                    )
+                
+                fire_sale_pct = st.session_state.fire_sale_pct
+                st.error(f"Owner Reduction: {fire_sale_pct:.1%} (Random: 51-77%)")
+            else:
+                fire_sale_enabled = False
+                fire_sale_pct = 0.0
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Team Strategy**")
+            scenario_mode = st.selectbox(
+                "Team Mode",
+                ["Win Now!", "Build a Dynasty!", "Neutral", "Rebuilding"],
+                index=["Win Now!", "Build a Dynasty!", "Neutral", "Rebuilding"].index(selected_team['mode']) if selected_team['mode'] in ["Win Now!", "Build a Dynasty!", "Neutral", "Rebuilding"] else 2,
+                help="Team's strategic approach"
+            )
+        
+        with col2:
+            st.markdown("**Fan Engagement**")
+            scenario_interest = st.slider(
+                "Fan Interest",
+                min_value=0,
+                max_value=100,
+                value=int(selected_team['fan_interest']),
+                help="Fan interest rating (0-100)"
+            )
+        
+        st.markdown("**Additional Adjustments**")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            scenario_budget_space = st.number_input(
+                "OOTP Budget Space ($M)",
+                min_value=-50.0,
+                max_value=100.0,
+                value=float(selected_team['budget_space']/1e6),
+                step=0.1,
+                help="Can be negative if over budget"
+            ) * 1e6
+        
+        with col2:
+            scenario_trade_cash = st.number_input(
+                "Cash from Trades ($M)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(selected_team['cash_from_trades']/1e6),
+                step=0.1,
+                help="Cash received in trades"
+            ) * 1e6
+        
+        with col3:
+            scenario_custom_bonus = st.number_input(
+                "Custom Bonus ($M)",
+                min_value=-50.0,
+                max_value=100.0,
+                value=0.0,
+                step=0.1,
+                help="Additional custom adjustment"
+            ) * 1e6
+        
+        st.markdown("---")
+        
+        # Calculate scenario investment
+        from market_engine import OwnerInvestmentCalculator
+        
+        scenario_calc = OwnerInvestmentCalculator.calculate_owner_investment(
+            budget=selected_team['budget'],
+            win_pct=scenario_win_pct,
+            mode=scenario_mode,
+            fan_interest=scenario_interest,
+            postseason_bonus=postseason_bonus if not fire_sale_enabled else 0.0,
+            fire_sale=fire_sale_enabled
+        )
+        
+        # Calculation Breakdown Section
+        st.subheader("Calculation Breakdown")
+        
+        # Step 1: Performance Factor
+        with st.expander("📊 Step 1: Performance Factor", expanded=True):
+            perf_factor = scenario_calc['performance_factor']
+            
+            # Visual tier chart
+            tiers = [
+                (">100 wins (>0.617)", 0.617, 1.0, 0.50),
+                ("94-100 wins (0.580-0.617)", 0.580, 0.617, 0.40),
+                ("88-94 wins (0.543-0.580)", 0.543, 0.580, 0.30),
+                ("82-88 wins (0.506-0.543)", 0.506, 0.543, 0.20),
+                ("76-82 wins (0.469-0.506)", 0.469, 0.506, 0.15),
+                ("70-76 wins (0.432-0.469)", 0.432, 0.469, 0.10),
+                ("<70 wins (<0.432)", 0.0, 0.432, 0.05)
+            ]
+            
+            tier_df = pd.DataFrame(tiers, columns=['Tier', 'Min', 'Max', 'Factor'])
+            tier_df['Current'] = tier_df.apply(
+                lambda x: '⭐' if x['Min'] <= scenario_win_pct < x['Max'] or (scenario_win_pct >= 0.617 and x['Max'] == 1.0) else '',
+                axis=1
+            )
+            tier_df['Factor_Display'] = tier_df['Factor'].apply(lambda x: f"{x:.0%}")
+            
+            st.dataframe(
+                tier_df[['Current', 'Tier', 'Factor_Display']].rename(columns={'Factor_Display': 'Factor'}),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            st.success(f"**Performance Factor: {perf_factor:.0%}** (Win % = {scenario_win_pct:.3f})")
+        
+        # Step 2: Mode Factor
+        with st.expander("🎯 Step 2: Mode Factor", expanded=True):
+            mode_factor = scenario_calc['mode_factor']
+            
+            mode_table = pd.DataFrame([
+                {'Mode': 'Win Now!', 'Factor': '100%', 'Description': 'Full investment'},
+                {'Mode': 'Build a Dynasty!', 'Factor': '75%', 'Description': 'Aggressive but strategic'},
+                {'Mode': 'Neutral', 'Factor': '50%', 'Description': 'Moderate'},
+                {'Mode': 'Rebuilding', 'Factor': '10%', 'Description': 'Minimal - development focus'}
+            ])
+            
+            mode_table['Current'] = mode_table['Mode'].apply(lambda x: '⭐' if x == scenario_mode else '')
+            
+            st.dataframe(mode_table[['Current', 'Mode', 'Factor', 'Description']], use_container_width=True, hide_index=True)
+            st.success(f"**Mode Factor: {mode_factor:.0%}** ({scenario_mode})")
+        
+        # Step 3: Interest Factor
+        with st.expander("❤️ Step 3: Interest Factor", expanded=True):
+            interest_factor = scenario_calc['interest_factor']
+            
+            interest_table = pd.DataFrame([
+                {'Range': '90-100', 'Factor': '120%', 'Mindset': 'Capitalize on passionate fanbase'},
+                {'Range': '75-89', 'Factor': '110%', 'Mindset': 'Strong support'},
+                {'Range': '60-74', 'Factor': '100%', 'Mindset': 'Solid baseline'},
+                {'Range': '45-59', 'Factor': '90%', 'Mindset': 'Fans cooling off'},
+                {'Range': '30-44', 'Factor': '85%', 'Mindset': 'Low interest'},
+                {'Range': '<30', 'Factor': '80%', 'Mindset': 'Apathetic fanbase'}
+            ])
+            
+            # Mark current range
+            def is_in_range(row, interest):
+                if '-' in row['Range']:
+                    low, high = map(int, row['Range'].split('-'))
+                    return low <= interest <= high
+                elif '<' in row['Range']:
+                    return interest < 30
+                else:
+                    return interest >= 90
+            
+            interest_table['Current'] = interest_table.apply(lambda x: '⭐' if is_in_range(x, scenario_interest) else '', axis=1)
+            
+            st.dataframe(interest_table[['Current', 'Range', 'Factor', 'Mindset']], use_container_width=True, hide_index=True)
+            st.success(f"**Interest Factor: {interest_factor:.0%}** (Fan Interest = {scenario_interest})")
+        
+        # Step 4: Base Owner Investment
+        with st.expander("💰 Step 4: Base Owner Investment", expanded=True):
+            st.markdown(f"""
+            **Formula:**
+            ```
+            Base Investment = Budget × Performance Factor × Mode Factor × Interest Factor
+            Base Investment = ${selected_team['budget']/1e6:.1f}M × {perf_factor:.0%} × {mode_factor:.0%} × {interest_factor:.0%}
+            Base Investment = ${scenario_calc['base_investment']/1e6:.2f}M
+            ```
+            """)
+            st.info(f"**Base Investment: ${scenario_calc['base_investment']/1e6:.2f}M**")
+        
+        # Step 5: Scenario Bonus/Penalty
+        with st.expander("🎖️ Step 5: Scenario Bonus/Penalty", expanded=True):
+            if fire_sale_enabled:
+                st.error(f"""
+                **🔥 FIRE SALE MODE 🔥**
+                
+                Owner is pocketing funds instead of investing!
+                
+                - Base Investment: ${scenario_calc['base_investment']/1e6:.2f}M
+                - Fire Sale Reduction: {fire_sale_pct:.1%}
+                - Owner Pocketed: ${scenario_calc['owner_pocketed']/1e6:.2f}M
+                - Final Investment: ${scenario_calc['final_investment']/1e6:.2f}M
+                
+                ⚠️ **Warning: Owner pocketed ${scenario_calc['owner_pocketed']/1e6:.2f}M ({fire_sale_pct:.1%}) - forcing teardown**
+                """)
+            elif postseason_bonus > 0:
+                st.success(f"""
+                **Postseason Success Bonus!**
+                
+                - Base Investment: ${scenario_calc['base_investment']/1e6:.2f}M
+                - Postseason Bonus: +{postseason_bonus:.0%}
+                - Final Investment: ${scenario_calc['final_investment']/1e6:.2f}M
+                
+                Bonus from: {postseason_result}
+                """)
+            else:
+                st.info(f"No postseason bonus applied. Final Investment = Base Investment = ${scenario_calc['final_investment']/1e6:.2f}M")
+        
+        st.markdown("---")
+        
+        # Final Budget Summary
+        st.subheader("💵 Final Budget Summary")
+        
+        # Calculate total
+        base_available = selected_team['budget'] - selected_team['payroll']
+        total_budget = base_available + scenario_budget_space + scenario_trade_cash + scenario_calc['final_investment'] + scenario_custom_bonus
+        
+        # Large display
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Owner Investment", f"${scenario_calc['final_investment']/1e6:.1f}M")
+        col2.metric("Total FA Budget", f"${total_budget/1e6:.1f}M", delta=f"{(total_budget - selected_team['total_fa_budget'])/1e6:.1f}M vs current")
+        col3.metric("Aggressiveness", f"{OwnerInvestmentCalculator.calculate_aggressiveness_score(perf_factor, mode_factor, interest_factor):.1f}/100")
+        
+        # Breakdown table
+        breakdown_data = {
+            'Source': ['Base Available', 'OOTP Budget Space', 'Cash from Trades', 'Owner Investment', 'Custom Bonus', '**TOTAL**'],
+            'Amount': [
+                f"${base_available/1e6:.1f}M",
+                f"${scenario_budget_space/1e6:.1f}M",
+                f"${scenario_trade_cash/1e6:.1f}M",
+                f"${scenario_calc['final_investment']/1e6:.1f}M",
+                f"${scenario_custom_bonus/1e6:.1f}M",
+                f"**${total_budget/1e6:.1f}M**"
+            ]
+        }
+        
+        st.table(pd.DataFrame(breakdown_data))
+        
+        # Comparison bar chart showing budget under all playoff scenarios
+        st.subheader("Budget Comparison Across Playoff Scenarios")
+        
+        scenario_comparisons = []
+        for scenario_name, bonus in postseason_options.items():
+            if scenario_name == "🔥 FIRE SALE":
+                calc = OwnerInvestmentCalculator.calculate_owner_investment(
+                    budget=selected_team['budget'],
+                    win_pct=scenario_win_pct,
+                    mode=scenario_mode,
+                    fan_interest=scenario_interest,
+                    postseason_bonus=0.0,
+                    fire_sale=True
+                )
+            else:
+                calc = OwnerInvestmentCalculator.calculate_owner_investment(
+                    budget=selected_team['budget'],
+                    win_pct=scenario_win_pct,
+                    mode=scenario_mode,
+                    fan_interest=scenario_interest,
+                    postseason_bonus=bonus,
+                    fire_sale=False
+                )
+            
+            total = base_available + scenario_budget_space + scenario_trade_cash + calc['final_investment'] + scenario_custom_bonus
+            
+            scenario_comparisons.append({
+                'Scenario': scenario_name,
+                'Owner Investment': calc['final_investment'],
+                'Total Budget': total,
+                'Current': '⭐' if scenario_name == postseason_result else ''
+            })
+        
+        comparison_df = pd.DataFrame(scenario_comparisons)
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            name='Total FA Budget',
+            x=comparison_df['Scenario'],
+            y=comparison_df['Total Budget'],
+            marker_color=['gold' if x == '⭐' else 'lightblue' for x in comparison_df['Current']],
+            text=comparison_df['Total Budget'].apply(lambda x: f"${x/1e6:.1f}M"),
+            textposition='outside'
+        ))
+        
+        fig.update_layout(
+            title="Total FA Budget by Scenario",
+            xaxis_title="Playoff Scenario",
+            yaxis_title="Total Budget ($)",
+            height=400,
+            showlegend=False
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Multi-Team Comparison
+        st.markdown("---")
+        st.subheader("Multi-Team Comparison")
+        
+        # Initialize session state for comparison teams
+        if 'comparison_teams' not in st.session_state:
+            st.session_state.comparison_teams = []
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            if st.button("➕ Add Current Scenario to Comparison"):
+                comparison_entry = {
+                    'Team': selected_team_name,
+                    'Scenario': postseason_result,
+                    'Win %': scenario_win_pct,
+                    'Mode': scenario_mode,
+                    'Interest': scenario_interest,
+                    'Owner Investment': scenario_calc['final_investment'],
+                    'Total Budget': total_budget
+                }
+                st.session_state.comparison_teams.append(comparison_entry)
+                st.success(f"Added {selected_team_name} to comparison!")
+        
+        with col2:
+            if st.button("🗑️ Clear Comparison"):
+                st.session_state.comparison_teams = []
+                st.success("Cleared comparison!")
+        
+        if len(st.session_state.comparison_teams) > 0:
+            comp_df = pd.DataFrame(st.session_state.comparison_teams)
+            
+            # Format for display
+            comp_display = comp_df.copy()
+            comp_display['Win %'] = comp_display['Win %'].apply(lambda x: f"{x:.3f}")
+            comp_display['Owner Investment'] = comp_display['Owner Investment'].apply(lambda x: f"${x/1e6:.1f}M")
+            comp_display['Total Budget'] = comp_display['Total Budget'].apply(lambda x: f"${x/1e6:.1f}M")
+            
+            # Add league rank
+            comp_df_sorted = comp_df.sort_values('Total Budget', ascending=False).reset_index(drop=True)
+            comp_df_sorted['Rank'] = range(1, len(comp_df_sorted) + 1)
+            
+            st.dataframe(comp_display, use_container_width=True)
+            
+            # Export comparison
+            csv = comp_df.to_csv(index=False)
+            st.download_button(
+                "📥 Download Comparison",
+                csv,
+                "budget_scenario_comparison.csv",
+                "text/csv"
+            )
+        else:
+            st.info("No teams in comparison yet. Configure a scenario and click 'Add to Comparison' above.")
+        
+        # Save/Load Configuration
+        st.markdown("---")
+        st.subheader("Save/Load Configuration")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("💾 Save Current Scenario"):
+                import json
+                config = {
+                    'team': selected_team_name,
+                    'wins': scenario_wins,
+                    'losses': scenario_losses,
+                    'postseason': postseason_result,
+                    'mode': scenario_mode,
+                    'interest': scenario_interest,
+                    'budget_space': scenario_budget_space,
+                    'trade_cash': scenario_trade_cash,
+                    'custom_bonus': scenario_custom_bonus
+                }
+                
+                config_json = json.dumps(config, indent=2)
+                st.download_button(
+                    "📥 Download Configuration",
+                    config_json,
+                    f"{selected_team_name.replace(' ', '_')}_scenario.json",
+                    "application/json"
+                )
+        
+        with col2:
+            uploaded_config = st.file_uploader("📁 Load Scenario Configuration", type=['json'])
+            if uploaded_config is not None:
+                import json
+                try:
+                    loaded_config = json.load(uploaded_config)
+                    st.success(f"Loaded scenario for {loaded_config.get('team', 'Unknown')}")
+                    st.json(loaded_config)
+                except Exception as e:
+                    st.error(f"Error loading configuration: {e}")
     
     # Footer
     st.markdown("---")

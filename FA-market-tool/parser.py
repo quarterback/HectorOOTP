@@ -12,11 +12,22 @@ import re
 class OOTPParser:
     """Parse OOTP HTML exports into structured data"""
     
+    # Expected column count in TeamFin.html
+    TEAMFIN_MIN_COLUMNS = 16
+    
     def __init__(self, html_dir: str = "."):
         self.html_dir = Path(html_dir)
     
     def parse_team_financials(self, filename: str = "TeamFin.html") -> pd.DataFrame:
-        """Extract team budget and payroll data"""
+        """Extract team budget and payroll data with all available columns
+        
+        Column mapping (0-indexed):
+        0: ID, 1: Team (city), 2: Team Name (full), 3: Abbr, 4: Pay (Payroll),
+        5: Bgt (Budget), 6: Tkt (Ticket Price), 7: BgtSpc (Budget Space),
+        8: Int (Fan Interest), 9: Mode (Team Mode), 10: Revenue, 11: Exp (Expenses),
+        12: CT (Cash from Trades), 13: lyW (Last Year Wins), 14: lyL (Last Year Losses),
+        15: ly% (Last Year Win Percentage)
+        """
         html_path = self.html_dir / filename
         
         with open(html_path, 'r', encoding='utf-8') as f:
@@ -30,38 +41,66 @@ class OOTPParser:
         teams = []
         rows = data_table.find_all('tr')[1:] if data_table else []  # Skip header
         
-        team_id = 0
         for row in rows:
             cols = row.find_all('td')
             
             # Skip rows that don't have team data
-            if len(cols) == 0:
+            if len(cols) < self.TEAMFIN_MIN_COLUMNS:  # Need at least 16 columns for full data
                 continue
-                
-            payroll = self._parse_money(cols[3].text) if len(cols) > 3 else 0.0
-            budget = self._parse_money(cols[4].text) if len(cols) > 4 else 0.0
+            
+            # Parse monetary values
+            payroll = self._parse_money(cols[4].text)
+            budget = self._parse_money(cols[5].text)
+            ticket_price = self._parse_money(cols[6].text)
+            budget_space = self._parse_money(cols[7].text)  # Can be negative!
+            revenue = self._parse_money(cols[10].text)
+            expenses = self._parse_money(cols[11].text)
+            cash_from_trades = self._parse_money(cols[12].text) if cols[12].text.strip() else 0.0
+            
+            # Parse integer values
+            team_id = int(cols[0].text.strip()) if cols[0].text.strip().isdigit() else 0
+            fan_interest = int(cols[8].text.strip()) if cols[8].text.strip().isdigit() else 50
+            last_year_wins = int(cols[13].text.strip()) if cols[13].text.strip().isdigit() else 0
+            last_year_losses = int(cols[14].text.strip()) if cols[14].text.strip().isdigit() else 0
+            
+            # Parse text values
+            team_city = cols[1].text.strip()
+            team_name = cols[2].text.strip()
+            abbr = cols[3].text.strip()
+            mode = cols[9].text.strip()  # "Win Now!", "Build a Dynasty!", "Neutral", "Rebuilding"
+            
+            # Parse win percentage
+            win_pct_text = cols[15].text.strip()
+            if win_pct_text and win_pct_text.startswith('.'):
+                win_pct = float(win_pct_text)
+            elif last_year_wins > 0 or last_year_losses > 0:
+                win_pct = last_year_wins / (last_year_wins + last_year_losses)
+            else:
+                win_pct = 0.500
             
             team_data = {
                 'team_id': team_id,
-                'team_name': cols[1].text.strip() if len(cols) > 1 else '',
-                'abbr': cols[2].text.strip() if len(cols) > 2 else '',
+                'team_city': team_city,
+                'team_name': team_name,
+                'abbr': abbr,
                 'payroll': payroll,
                 'budget': budget,
-                'available_for_fa': budget - payroll,
+                'ticket_price': ticket_price,
+                'budget_space': budget_space,
+                'fan_interest': fan_interest,
+                'mode': mode,
+                'revenue': revenue,
+                'expenses': expenses,
+                'cash_from_trades': cash_from_trades,
+                'last_year_wins': last_year_wins,
+                'last_year_losses': last_year_losses,
+                'win_pct': win_pct,
+                'available_for_fa': budget - payroll,  # Basic calculation, will be enhanced
             }
-            team_id += 1
-            
-            # Optional: Add win/loss data if available
-            if len(cols) >= 7:
-                team_data['last_year_wins'] = int(cols[5].text.strip()) if cols[5].text.strip().isdigit() else 0
-                team_data['last_year_losses'] = int(cols[6].text.strip()) if cols[6].text.strip().isdigit() else 0
             
             teams.append(team_data)
         
-        df = pd.DataFrame(teams)
-        if 'last_year_wins' in df.columns and 'last_year_losses' in df.columns:
-            df['win_pct'] = df['last_year_wins'] / (df['last_year_wins'] + df['last_year_losses'])
-        return df
+        return pd.DataFrame(teams)
     
     def parse_free_agents(self, filename: str = "fafinancials.html") -> pd.DataFrame:
         """Extract free agent player data"""

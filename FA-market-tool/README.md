@@ -24,12 +24,33 @@ An interactive web dashboard for analyzing salary market dynamics in Out of the 
 - Elite vs role player premium analysis
 - Signed player vs free agent comparisons
 
-### 🏢 Team Analysis
-- Team spending and budget utilization
-- Roster composition analysis
-- Elite player counts by team
-- Sortable team financials (payroll, available FA budget, etc.)
-- Interactive visualizations of team spending patterns
+### 🏢 Team Analysis (Enhanced!)
+- **Owner Investment Calculator**: Analyze owner capital injections based on performance, team mode, and fan interest
+- **Comprehensive Team Data**: 17+ columns including last year's record, fan interest, OOTP budget space, and trade cash
+- **Total FA Budget**: Complete calculation including base budget, OOTP space, trade cash, and owner investment
+- **Configurable Display**: Slider to show 10 to all teams
+- **Advanced Visualizations**:
+  - Stacked bar chart: FA budget breakdown by source
+  - Scatter plot: Win % vs Owner Investment (colored by team mode)
+  - Heatmap: Performance × Team Mode aggressiveness scores
+- **Color-Coded Insights**: Aggressiveness scores (0-100), mode badges, negative budget warnings
+- **Enhanced Sorting**: Sort by total FA budget, owner investment, aggressiveness score, and more
+- Exportable CSV reports
+
+### 🎯 Budget Scenarios (New!)
+- **Interactive Scenario Modeling**: Model "what-if" scenarios for any team
+- **Configurable Inputs**: Adjust wins/losses, postseason results, team mode, and fan interest
+- **Postseason Bonuses**: Calculate impact of playoff success (Wild Card +15%, Division +25%, Pennant +35%, World Series +50%)
+- **Fire Sale Mode**: Simulate owner teardown scenarios (random 51-77% reduction)
+- **Step-by-Step Breakdown**: 5-step expandable calculation showing:
+  1. Performance Factor (5-50% based on win %)
+  2. Mode Factor (Win Now 100%, Dynasty 75%, Neutral 50%, Rebuilding 10%)
+  3. Interest Factor (80-120% based on fan engagement)
+  4. Base Owner Investment calculation
+  5. Scenario bonus/penalty application
+- **Budget Comparison Chart**: Visualize total FA budget under all playoff scenarios
+- **Multi-Team Comparison**: Add multiple scenarios to compare teams side-by-side
+- **Save/Load Configurations**: Export and import scenario configurations as JSON
 
 ### 🔍 Player Lookup
 - Find comparable players by position and overall rating
@@ -96,7 +117,7 @@ The dashboard will open in your default web browser at `http://localhost:8501`.
 
 ### 3. Navigate the Dashboard
 
-The application has 7 main tabs:
+The application has **8 main tabs**:
 
 #### 📊 Market Overview
 View league-wide statistics:
@@ -156,6 +177,79 @@ Find comparable players:
 - View comparable players with salaries
 - See salary statistics (avg, median, range)
 - Download comparables as CSV
+
+#### 🎯 Budget Scenarios (New!)
+Model different financial scenarios for teams:
+- **Select any team** to analyze
+- **Configure scenario** - adjust wins/losses, postseason results, team mode, fan interest
+- **View calculation breakdown** - see step-by-step how owner investment is calculated
+- **Compare scenarios** - add multiple teams/scenarios to comparison table
+- **Export configurations** - save and load scenario settings as JSON
+- **Playoff bonus modeling** - see impact of postseason success on owner investment
+- **Fire Sale mode** - simulate teardown scenarios with randomized owner reduction
+
+## Owner Investment System
+
+The tool includes a sophisticated owner investment calculator that models how team owners inject capital based on three key factors:
+
+### Formula
+```
+Owner Investment = Base Budget × Performance Factor × Mode Factor × Interest Factor
+```
+
+### Performance Factor (5-50%)
+Based on last year's win percentage:
+- **>100 wins (>.617)**: 50% - Championship window
+- **94-100 wins (.580-.617)**: 40% - Contender
+- **88-94 wins (.543-.580)**: 30% - Playoff team
+- **82-88 wins (.506-.543)**: 20% - Bubble team
+- **76-82 wins (.469-.506)**: 15% - Below average
+- **70-76 wins (.432-.469)**: 10% - Struggling
+- **<70 wins (<.432)**: 5% - Poor performance
+
+### Mode Factor (10-100%)
+Based on team strategy:
+- **Win Now!**: 100% - Full investment to compete now
+- **Build a Dynasty!**: 75% - Aggressive but strategic
+- **Neutral**: 50% - Moderate approach
+- **Rebuilding**: 10% - Minimal investment, focus on development
+
+### Interest Factor (80-120%)
+Based on fan interest (0-100 scale):
+- **90-100**: 120% - Capitalize on passionate fanbase
+- **75-89**: 110% - Strong support
+- **60-74**: 100% - Solid baseline
+- **45-59**: 90% - Fans cooling off
+- **30-44**: 85% - Low interest
+- **<30**: 80% - Apathetic fanbase
+
+### Total FA Budget
+```
+Total FA Budget = (Budget - Payroll) + OOTP Budget Space + Cash from Trades + Owner Investment
+```
+
+### Example Calculations
+
+**Chicago Cubs** (Win Now!, 103-59, Interest 100):
+- Performance: 50% (>100 wins)
+- Mode: 100% (Win Now!)
+- Interest: 120% (100)
+- Owner Investment: $100M × 0.50 × 1.00 × 1.20 = **$60M**
+- Total FA Budget: $31.5M + $0 + $0 + $60M = **$91.5M**
+
+**Nashville White Sox** (Win Now!, 97-65, Interest 97, OVER BUDGET):
+- Performance: 40% (94-100 wins)
+- Mode: 100% (Win Now!)
+- Interest: 120% (97)
+- Owner Investment: $100M × 0.40 × 1.00 × 1.20 = **$48M**
+- Total: $20.9M + (-$19M) + $0 + $48M = **$49.9M** (owner bails them out!)
+
+**St. Louis Cardinals** (Rebuilding, 65-97, Interest 68):
+- Performance: 5% (<70 wins)
+- Mode: 10% (Rebuilding)
+- Interest: 100% (68)
+- Owner Investment: $100M × 0.05 × 0.10 × 1.00 = **$0.5M**
+- Total: $86.7M + $28M + $0 + $0.5M = **$115.2M** (but won't use it in rebuild)
 
 ## Data Processing
 
