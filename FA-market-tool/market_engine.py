@@ -7,6 +7,13 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Tuple, List
 import random
+import datetime
+
+# Import new market equilibrium modules
+from market_liquidity import MarketLiquidityAnalyzer
+from sentiment_logic import OwnerSentimentEngine
+from positional_scarcity import PositionalScarcityAdjuster
+from desperation_decay import DesperationDecayCalculator
 
 class OwnerInvestmentCalculator:
     """Calculate owner investment based on team performance, mode, and fan interest"""
@@ -697,6 +704,95 @@ class MarketAnalyzer:
         percentile = (below_count / len(salaries)) * 100
         
         return percentile
+    
+    # ========== MARKET EQUILIBRIUM METHODS ==========
+    
+    def get_market_equilibrium_data(self, current_date: datetime.date = None) -> Dict:
+        """Get comprehensive market equilibrium analysis
+        
+        Args:
+            current_date: Current date for desperation decay calculations
+                         Defaults to January 1 of current year
+        
+        Returns:
+            Dictionary with all market equilibrium data:
+            - liquidity: Market liquidity analysis
+            - sentiment: Owner sentiment analysis for all teams
+            - fmv: Fair Market Value calculations for all FAs
+            - decay: Desperation decay calculations (if date provided)
+        """
+        # Set default date if not provided
+        if current_date is None:
+            current_date = datetime.date(datetime.datetime.now().year, 1, 1)
+        
+        # Calculate owner sentiment for all teams
+        sentiment_df = OwnerSentimentEngine.analyze_all_teams(self.teams)
+        
+        # Calculate market liquidity with sentiment data
+        liquidity_analyzer = MarketLiquidityAnalyzer(self.teams)
+        liquidity_data = liquidity_analyzer.calculate_market_liquidity(sentiment_df)
+        
+        # Calculate FMV for all free agents
+        fmv_df = PositionalScarcityAdjuster.calculate_fmv_for_all_players(
+            self.free_agents, liquidity_data
+        )
+        
+        # Calculate desperation decay
+        decay_df = DesperationDecayCalculator.apply_decay_to_all_players(
+            fmv_df, current_date, liquidity_data
+        )
+        
+        return {
+            'liquidity': liquidity_data,
+            'sentiment': sentiment_df,
+            'fmv': fmv_df,
+            'decay': decay_df,
+            'current_date': current_date
+        }
+    
+    def calculate_fmv_for_player(self, position: str, overall: float, war: float,
+                                demand: float = 0) -> Dict:
+        """Calculate Fair Market Value for a specific player
+        
+        Args:
+            position: Player position code
+            overall: Overall rating (0.5 to 5.0 stars)
+            war: Projected WAR
+            demand: Optional current OOTP demand
+        
+        Returns:
+            Dictionary with FMV calculation breakdown
+        """
+        # Get sentiment data and liquidity
+        sentiment_df = OwnerSentimentEngine.analyze_all_teams(self.teams)
+        liquidity_analyzer = MarketLiquidityAnalyzer(self.teams)
+        liquidity_data = liquidity_analyzer.calculate_market_liquidity(sentiment_df)
+        
+        # Calculate league $/WAR
+        league_dollars_per_war = PositionalScarcityAdjuster.calculate_league_dollars_per_war(
+            self.free_agents
+        )
+        
+        # Build player dict
+        player = {
+            'position': position,
+            'overall': overall,
+            'war': war,
+            'demand': demand
+        }
+        
+        # Calculate FMV
+        fmv_result = PositionalScarcityAdjuster.calculate_fmv(
+            player, league_dollars_per_war, liquidity_data
+        )
+        
+        return {
+            **fmv_result,
+            'league_dollars_per_war': league_dollars_per_war,
+            'position': position,
+            'overall': overall,
+            'war': war
+        }
 
 
 # Usage Example
