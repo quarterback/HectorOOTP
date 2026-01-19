@@ -12,7 +12,7 @@ import re
 class OOTPParser:
     """Parse OOTP HTML exports into structured data"""
     
-    def __init__(self, html_dir: str = "FA-market-tool"):
+    def __init__(self, html_dir: str = "."):
         self.html_dir = Path(html_dir)
     
     def parse_team_financials(self, filename: str = "TeamFin.html") -> pd.DataFrame:
