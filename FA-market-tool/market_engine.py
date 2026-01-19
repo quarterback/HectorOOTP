@@ -264,14 +264,18 @@ class MarketAnalyzer:
         """Calculate salary statistics by player tier (star rating)"""
         stats = []
         
-        # Define tiers
+        # Define tiers - Full OOTP star rating tiers (0.5 to 5.0 in 0.5 increments)
         tiers = [
             ('Elite (5.0★)', 5.0, 5.0),
-            ('Star (4.5★)', 4.5, 4.9),
-            ('Above Average (4.0★)', 4.0, 4.4),
-            ('Average (3.5★)', 3.5, 3.9),
-            ('Below Average (3.0★)', 3.0, 3.4),
-            ('Role Player (<3.0★)', 0.0, 2.9),
+            ('Star (4.5★)', 4.5, 4.5),
+            ('Above Average (4.0★)', 4.0, 4.0),
+            ('Solid Average (3.5★)', 3.5, 3.5),
+            ('Average (3.0★)', 3.0, 3.0),
+            ('Below Average (2.5★)', 2.5, 2.5),
+            ('Backup/Depth (2.0★)', 2.0, 2.0),
+            ('Fringe (1.5★)', 1.5, 1.5),
+            ('Minor League (1.0★)', 1.0, 1.0),
+            ('Organizational (0.5★)', 0.5, 0.5),
         ]
         
         for tier_name, min_ovr, max_ovr in tiers:
@@ -437,14 +441,18 @@ class MarketAnalyzer:
         Returns:
             DataFrame with columns: position, tier, source, count, min, p25, median, p75, max, avg
         """
-        # Define tiers based on overall rating
+        # Define tiers - Full OOTP star rating tiers (0.5 to 5.0 in 0.5 increments)
         tiers = [
             ('Elite (5.0★)', 5.0, 5.0),
-            ('Star (4.5★)', 4.5, 4.9),
-            ('Above Average (4.0★)', 4.0, 4.4),
-            ('Average (3.5★)', 3.5, 3.9),
-            ('Below Average (3.0★)', 3.0, 3.4),
-            ('Role Player (<3.0★)', 0.0, 2.9),
+            ('Star (4.5★)', 4.5, 4.5),
+            ('Above Average (4.0★)', 4.0, 4.0),
+            ('Solid Average (3.5★)', 3.5, 3.5),
+            ('Average (3.0★)', 3.0, 3.0),
+            ('Below Average (2.5★)', 2.5, 2.5),
+            ('Backup/Depth (2.0★)', 2.0, 2.0),
+            ('Fringe (1.5★)', 1.5, 1.5),
+            ('Minor League (1.0★)', 1.0, 1.0),
+            ('Organizational (0.5★)', 0.5, 0.5),
         ]
         
         # Filter data based on source
@@ -543,9 +551,13 @@ class MarketAnalyzer:
             'Elite (5.0★)', 
             'Star (4.5★)', 
             'Above Average (4.0★)', 
-            'Average (3.5★)', 
-            'Below Average (3.0★)', 
-            'Role Player (<3.0★)'
+            'Solid Average (3.5★)', 
+            'Average (3.0★)', 
+            'Below Average (2.5★)', 
+            'Backup/Depth (2.0★)', 
+            'Fringe (1.5★)', 
+            'Minor League (1.0★)', 
+            'Organizational (0.5★)'
         ]
         
         # Only include columns that exist

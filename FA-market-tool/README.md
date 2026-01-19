@@ -19,10 +19,11 @@ An interactive web dashboard for analyzing salary market dynamics in Out of the 
 - Exportable CSV reports
 
 ### ⭐ Tier Analysis
-- Salary breakdowns by player quality (5.0★ elite to <3.0★ role players)
+- Salary breakdowns by player quality (10 half-star tiers: 5.0★ Elite to 0.5★ Organizational)
+- Granular tier system: Elite, Star, Above Average, Solid Average, Average, Below Average, Backup/Depth, Fringe, Minor League, Organizational
 - Tier-based salary distributions
-- Elite vs role player premium analysis
-- Signed player vs free agent comparisons
+- Elite vs organizational player premium analysis
+- Signed player vs free agent comparisons by tier
 
 ### 🏢 Team Analysis (Enhanced!)
 - **Owner Investment Calculator**: Analyze owner capital injections based on performance, team mode, and fan interest
@@ -37,20 +38,23 @@ An interactive web dashboard for analyzing salary market dynamics in Out of the 
 - **Enhanced Sorting**: Sort by total FA budget, owner investment, aggressiveness score, and more
 - Exportable CSV reports
 
-### 🎯 Budget Scenarios (New!)
+### 🎯 Budget Scenarios
 - **Interactive Scenario Modeling**: Model "what-if" scenarios for any team
 - **Configurable Inputs**: Adjust wins/losses, postseason results, team mode, and fan interest
-- **Postseason Bonuses**: Calculate impact of playoff success (Wild Card +15%, Division +25%, Pennant +35%, World Series +50%)
-- **Fire Sale Mode**: Simulate owner teardown scenarios (random 51-77% reduction)
-- **Step-by-Step Breakdown**: 5-step expandable calculation showing:
+- **Prominent Final Budget Summary**: Key results displayed at top for immediate visibility
+- **Quick Summary Bar**: One-line overview of all calculation factors
+- **Collapsible Detailed Breakdown**: 5-step expandable calculation (collapsed by default):
   1. Performance Factor (5-50% based on win %)
   2. Mode Factor (Win Now 100%, Dynasty 75%, Neutral 50%, Rebuilding 10%)
   3. Interest Factor (80-120% based on fan engagement)
   4. Base Owner Investment calculation
   5. Scenario bonus/penalty application
+- **Postseason Bonuses**: Calculate impact of playoff success (Wild Card +15%, Division +25%, Pennant +35%, World Series +50%)
+- **Fire Sale Mode**: Simulate owner teardown scenarios (random 51-77% reduction with re-randomize)
 - **Budget Comparison Chart**: Visualize total FA budget under all playoff scenarios
 - **Multi-Team Comparison**: Add multiple scenarios to compare teams side-by-side
 - **Save/Load Configurations**: Export and import scenario configurations as JSON
+- **Real-time Updates**: All calculations update immediately when inputs change
 
 ### 🔍 Player Lookup
 - Find comparable players by position and overall rating

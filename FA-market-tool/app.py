@@ -128,9 +128,13 @@ try:
                 'Elite (5.0★)', 
                 'Star (4.5★)', 
                 'Above Average (4.0★)', 
-                'Average (3.5★)', 
-                'Below Average (3.0★)', 
-                'Role Player (<3.0★)'
+                'Solid Average (3.5★)', 
+                'Average (3.0★)', 
+                'Below Average (2.5★)', 
+                'Backup/Depth (2.0★)', 
+                'Fringe (1.5★)', 
+                'Minor League (1.0★)', 
+                'Organizational (0.5★)'
             ]
             selected_tiers = st.multiselect(
                 "Select Tiers",
@@ -684,11 +688,15 @@ try:
             fa_ranges = []
             tiers_def = [
                 ('Elite (5.0★)', 5.0, 5.0),
-                ('Star (4.5★)', 4.5, 4.9),
-                ('Above Average (4.0★)', 4.0, 4.4),
-                ('Average (3.5★)', 3.5, 3.9),
-                ('Below Average (3.0★)', 3.0, 3.4),
-                ('Role Player (<3.0★)', 0.0, 2.9),
+                ('Star (4.5★)', 4.5, 4.5),
+                ('Above Average (4.0★)', 4.0, 4.0),
+                ('Solid Average (3.5★)', 3.5, 3.5),
+                ('Average (3.0★)', 3.0, 3.0),
+                ('Below Average (2.5★)', 2.5, 2.5),
+                ('Backup/Depth (2.0★)', 2.0, 2.0),
+                ('Fringe (1.5★)', 1.5, 1.5),
+                ('Minor League (1.0★)', 1.0, 1.0),
+                ('Organizational (0.5★)', 0.5, 0.5),
             ]
             
             for tier_name, min_ovr, max_ovr in tiers_def:
@@ -723,17 +731,17 @@ try:
         # Tier insights
         st.subheader("Tier Insights")
         elite_tier = tier_stats[tier_stats['tier'].str.contains('Elite')].iloc[0]
-        role_tier = tier_stats[tier_stats['tier'].str.contains('Role Player')].iloc[0]
+        org_tier = tier_stats[tier_stats['tier'].str.contains('Organizational')].iloc[0]
         
         col1, col2, col3 = st.columns(3)
         col1.metric("Elite Players (5.0★)", f"{elite_tier['total_players']}")
         col1.metric("Elite Avg Salary", f"${elite_tier['avg_salary']/1e6:.2f}M")
         
-        col2.metric("Role Players (<3.0★)", f"{role_tier['total_players']}")
-        col2.metric("Role Avg Salary", f"${role_tier['avg_salary']/1e6:.2f}M")
+        col2.metric("Organizational Players (0.5★)", f"{org_tier['total_players']}")
+        col2.metric("Org Avg Salary", f"${org_tier['avg_salary']/1e6:.2f}M")
         
-        col3.metric("Elite Premium", f"{elite_tier['avg_salary']/role_tier['avg_salary']:.1f}x")
-        col3.caption("Elite players earn this multiple of role players")
+        col3.metric("Elite Premium", f"{elite_tier['avg_salary']/org_tier['avg_salary']:.1f}x")
+        col3.caption("Elite players earn this multiple of organizational players")
     
     # ========== TAB 6: TEAM ANALYSIS ==========
     with tab6:
@@ -1192,12 +1200,52 @@ try:
             fire_sale=fire_sale_enabled
         )
         
-        # Calculation Breakdown Section
-        st.subheader("Calculation Breakdown")
+        # Extract factors for convenience
+        perf_factor = scenario_calc['performance_factor']
+        mode_factor = scenario_calc['mode_factor']
+        interest_factor = scenario_calc['interest_factor']
         
-        # Step 1: Performance Factor
-        with st.expander("📊 Step 1: Performance Factor", expanded=True):
-            perf_factor = scenario_calc['performance_factor']
+        # ========== FINAL BUDGET SUMMARY (MOVED TO TOP) ==========
+        st.subheader("💵 Final Budget Summary")
+        
+        # Calculate total
+        base_available = selected_team['budget'] - selected_team['payroll']
+        total_budget = base_available + scenario_budget_space + scenario_trade_cash + scenario_calc['final_investment'] + scenario_custom_bonus
+        
+        # Large display
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Owner Investment", f"${scenario_calc['final_investment']/1e6:.1f}M")
+        col2.metric("Total FA Budget", f"${total_budget/1e6:.1f}M", delta=f"{(total_budget - selected_team['total_fa_budget'])/1e6:.1f}M vs current")
+        col3.metric("Aggressiveness", f"{OwnerInvestmentCalculator.calculate_aggressiveness_score(perf_factor, mode_factor, interest_factor):.1f}/100")
+        
+        # Breakdown table
+        breakdown_data = {
+            'Source': ['Base Available', 'OOTP Budget Space', 'Cash from Trades', 'Owner Investment', 'Custom Bonus', '**TOTAL**'],
+            'Amount': [
+                f"${base_available/1e6:.1f}M",
+                f"${scenario_budget_space/1e6:.1f}M",
+                f"${scenario_trade_cash/1e6:.1f}M",
+                f"${scenario_calc['final_investment']/1e6:.1f}M",
+                f"${scenario_custom_bonus/1e6:.1f}M",
+                f"**${total_budget/1e6:.1f}M**"
+            ]
+        }
+        
+        st.table(pd.DataFrame(breakdown_data))
+        
+        # ========== QUICK SUMMARY BAR ==========
+        st.markdown("---")
+        st.markdown("**Quick Summary**")
+        st.info(f"Performance: {perf_factor:.0%} • Mode: {mode_factor:.0%} • Interest: {interest_factor:.0%} → Owner Investment: ${scenario_calc['final_investment']/1e6:.1f}M")
+        
+        # ========== DETAILED CALCULATION BREAKDOWN (COLLAPSIBLE) ==========
+        st.markdown("---")
+        
+        with st.expander("📊 View Detailed Calculation Breakdown", expanded=False):
+            st.markdown("### Step-by-Step Calculation")
+            
+            # Step 1: Performance Factor
+            st.markdown("#### 📊 Step 1: Performance Factor")
             
             # Visual tier chart
             tiers = [
@@ -1224,10 +1272,11 @@ try:
             )
             
             st.success(f"**Performance Factor: {perf_factor:.0%}** (Win % = {scenario_win_pct:.3f})")
-        
-        # Step 2: Mode Factor
-        with st.expander("🎯 Step 2: Mode Factor", expanded=True):
-            mode_factor = scenario_calc['mode_factor']
+            
+            st.markdown("---")
+            
+            # Step 2: Mode Factor
+            st.markdown("#### 🎯 Step 2: Mode Factor")
             
             mode_table = pd.DataFrame([
                 {'Mode': 'Win Now!', 'Factor': '100%', 'Description': 'Full investment'},
@@ -1240,10 +1289,11 @@ try:
             
             st.dataframe(mode_table[['Current', 'Mode', 'Factor', 'Description']], use_container_width=True, hide_index=True)
             st.success(f"**Mode Factor: {mode_factor:.0%}** ({scenario_mode})")
-        
-        # Step 3: Interest Factor
-        with st.expander("❤️ Step 3: Interest Factor", expanded=True):
-            interest_factor = scenario_calc['interest_factor']
+            
+            st.markdown("---")
+            
+            # Step 3: Interest Factor
+            st.markdown("#### ❤️ Step 3: Interest Factor")
             
             interest_table = pd.DataFrame([
                 {'Range': '90-100', 'Factor': '120%', 'Mindset': 'Capitalize on passionate fanbase'},
@@ -1268,9 +1318,11 @@ try:
             
             st.dataframe(interest_table[['Current', 'Range', 'Factor', 'Mindset']], use_container_width=True, hide_index=True)
             st.success(f"**Interest Factor: {interest_factor:.0%}** (Fan Interest = {scenario_interest})")
-        
-        # Step 4: Base Owner Investment
-        with st.expander("💰 Step 4: Base Owner Investment", expanded=True):
+            
+            st.markdown("---")
+            
+            # Step 4: Base Owner Investment
+            st.markdown("#### 💰 Step 4: Base Owner Investment")
             st.markdown(f"""
             **Formula:**
             ```
@@ -1280,9 +1332,11 @@ try:
             ```
             """)
             st.info(f"**Base Investment: ${scenario_calc['base_investment']/1e6:.2f}M**")
-        
-        # Step 5: Scenario Bonus/Penalty
-        with st.expander("🎖️ Step 5: Scenario Bonus/Penalty", expanded=True):
+            
+            st.markdown("---")
+            
+            # Step 5: Scenario Bonus/Penalty
+            st.markdown("#### 🎖️ Step 5: Scenario Bonus/Penalty")
             if fire_sale_enabled:
                 st.error(f"""
                 **🔥 FIRE SALE MODE 🔥**
@@ -1310,34 +1364,6 @@ try:
                 st.info(f"No postseason bonus applied. Final Investment = Base Investment = ${scenario_calc['final_investment']/1e6:.2f}M")
         
         st.markdown("---")
-        
-        # Final Budget Summary
-        st.subheader("💵 Final Budget Summary")
-        
-        # Calculate total
-        base_available = selected_team['budget'] - selected_team['payroll']
-        total_budget = base_available + scenario_budget_space + scenario_trade_cash + scenario_calc['final_investment'] + scenario_custom_bonus
-        
-        # Large display
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Owner Investment", f"${scenario_calc['final_investment']/1e6:.1f}M")
-        col2.metric("Total FA Budget", f"${total_budget/1e6:.1f}M", delta=f"{(total_budget - selected_team['total_fa_budget'])/1e6:.1f}M vs current")
-        col3.metric("Aggressiveness", f"{OwnerInvestmentCalculator.calculate_aggressiveness_score(perf_factor, mode_factor, interest_factor):.1f}/100")
-        
-        # Breakdown table
-        breakdown_data = {
-            'Source': ['Base Available', 'OOTP Budget Space', 'Cash from Trades', 'Owner Investment', 'Custom Bonus', '**TOTAL**'],
-            'Amount': [
-                f"${base_available/1e6:.1f}M",
-                f"${scenario_budget_space/1e6:.1f}M",
-                f"${scenario_trade_cash/1e6:.1f}M",
-                f"${scenario_calc['final_investment']/1e6:.1f}M",
-                f"${scenario_custom_bonus/1e6:.1f}M",
-                f"**${total_budget/1e6:.1f}M**"
-            ]
-        }
-        
-        st.table(pd.DataFrame(breakdown_data))
         
         # Comparison bar chart showing budget under all playoff scenarios
         st.subheader("Budget Comparison Across Playoff Scenarios")
