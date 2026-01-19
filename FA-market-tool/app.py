@@ -1601,8 +1601,9 @@ try:
             league_dollars_per_war = PositionalScarcityAdjuster.calculate_league_dollars_per_war(free_agents)
         col4.metric("League $/WAR", f"${league_dollars_per_war/1e6:.2f}M")
         
+        market_liquidity_ratio = liquidity['total_market_liquidity'] / overview['total_fa_demands']
         st.caption(f"💡 **Insight:** {'Buyer\'s Market' if liquidity['total_market_liquidity'] > overview['total_fa_demands'] else 'Seller\'s Market'} - "
-                  f"Market liquidity is {liquidity['total_market_liquidity']/overview['total_fa_demands']:.1f}x total FA demands")
+                  f"Market liquidity is {market_liquidity_ratio:.1f}x total FA demands")
         
         # ========== SECTION 2: OWNER SENTIMENT ANALYSIS ==========
         st.subheader("💼 Owner Sentiment Analysis")
