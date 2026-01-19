@@ -22,3 +22,8 @@ build/
 dist/
 *.egg-info/
 *.spec
+
+# FA Market Tool - Generated files
+FA-market-tool/parsed_*.csv
+FA-market-tool/*.csv
+FA-market-tool/__pycache__/
