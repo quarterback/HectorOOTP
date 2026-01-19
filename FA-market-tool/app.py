@@ -740,7 +740,7 @@ try:
         with col1:
             sort_by = st.selectbox(
                 "Sort by",
-                ['payroll', 'available_for_fa', 'budget_utilization', 'elite_players'],
+                ['payroll', 'available_for_fa', 'budget_utilization'],
                 index=0
             )
         with col2:
@@ -763,26 +763,9 @@ try:
         fig.update_layout(height=400, xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
         
-        # Budget utilization scatter
-        st.subheader("Budget Utilization vs Payroll")
-        fig = px.scatter(
-            team_stats,
-            x='payroll',
-            y='budget_utilization',
-            size='roster_size',
-            color='elite_players',
-            hover_name='team_name',
-            title="Team Payroll vs Budget Utilization",
-            labels={'payroll': 'Payroll ($)', 'budget_utilization': 'Budget Utilization (%)'},
-            color_continuous_scale='Viridis'
-        )
-        fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
-        
         # Team details table
         st.subheader("Team Financial Details")
-        display_cols = ['team_name', 'payroll', 'budget', 'available_for_fa', 
-                       'budget_utilization', 'roster_size', 'elite_players']
+        display_cols = ['team_name', 'payroll', 'budget', 'available_for_fa', 'budget_utilization']
         
         team_display = sorted_teams[display_cols].copy()
         for col in ['payroll', 'budget', 'available_for_fa']:
