@@ -11,6 +11,16 @@ import random
 class OwnerInvestmentCalculator:
     """Calculate owner investment based on team performance, mode, and fan interest"""
     
+    # Fire sale percentage range (random reduction)
+    FIRE_SALE_MIN = 0.51  # 51% minimum reduction
+    FIRE_SALE_MAX = 0.77  # 77% maximum reduction
+    
+    # Maximum possible aggressiveness score calculation
+    MAX_PERFORMANCE_FACTOR = 0.5
+    MAX_MODE_FACTOR = 1.0
+    MAX_INTEREST_FACTOR = 1.2
+    MAX_COMBINED_FACTOR = MAX_PERFORMANCE_FACTOR * MAX_MODE_FACTOR * MAX_INTEREST_FACTOR  # = 0.6
+    
     @staticmethod
     def calculate_performance_factor(win_pct: float) -> float:
         """Calculate performance factor based on last year's win percentage
@@ -116,7 +126,10 @@ class OwnerInvestmentCalculator:
         fire_sale_reduction = 0.0
         owner_pocketed = 0.0
         if fire_sale:
-            fire_sale_pct = random.uniform(0.51, 0.77)
+            fire_sale_pct = random.uniform(
+                OwnerInvestmentCalculator.FIRE_SALE_MIN, 
+                OwnerInvestmentCalculator.FIRE_SALE_MAX
+            )
             fire_sale_reduction = fire_sale_pct
             owner_pocketed = final_investment * fire_sale_pct
             final_investment = final_investment * (1 - fire_sale_pct)
@@ -152,10 +165,8 @@ class OwnerInvestmentCalculator:
         
         Combines all factors into a single 0-100 score
         """
-        # Max values: perf=0.5, mode=1.0, interest=1.2
-        # Combined max = 0.5 * 1.0 * 1.2 = 0.6
         combined = performance_factor * mode_factor * interest_factor
-        score = (combined / 0.6) * 100
+        score = (combined / OwnerInvestmentCalculator.MAX_COMBINED_FACTOR) * 100
         return min(100, max(0, score))
 
 class MarketAnalyzer:

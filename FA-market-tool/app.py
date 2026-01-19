@@ -8,8 +8,12 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import random
-from market_engine import MarketAnalyzer
+from market_engine import MarketAnalyzer, OwnerInvestmentCalculator
 from parser import OOTPParser
+
+# Win percentage tier bins for heatmap visualization
+WIN_PCT_BINS = [0, 0.432, 0.469, 0.506, 0.543, 0.580, 0.617, 1.0]
+WIN_PCT_LABELS = ['<70W', '70-76W', '76-82W', '82-88W', '88-94W', '94-100W', '>100W']
 
 st.set_page_config(page_title="OOTP Market Analyzer", layout="wide", page_icon="⚾")
 
@@ -862,8 +866,7 @@ try:
         heatmap_data = sorted_teams.pivot_table(
             values='aggressiveness_score',
             index='mode',
-            columns=pd.cut(sorted_teams['win_pct'], bins=[0, 0.432, 0.469, 0.506, 0.543, 0.580, 0.617, 1.0],
-                          labels=['<70W', '70-76W', '76-82W', '82-88W', '88-94W', '94-100W', '>100W']),
+            columns=pd.cut(sorted_teams['win_pct'], bins=WIN_PCT_BINS, labels=WIN_PCT_LABELS),
             aggfunc='mean'
         )
         
@@ -1110,7 +1113,10 @@ try:
                 
                 # Allow regeneration of fire sale percentage
                 if 'fire_sale_pct' not in st.session_state or st.button("🎲 Re-randomize Fire Sale %"):
-                    st.session_state.fire_sale_pct = random.uniform(0.51, 0.77)
+                    st.session_state.fire_sale_pct = random.uniform(
+                        OwnerInvestmentCalculator.FIRE_SALE_MIN,
+                        OwnerInvestmentCalculator.FIRE_SALE_MAX
+                    )
                 
                 fire_sale_pct = st.session_state.fire_sale_pct
                 st.error(f"Owner Reduction: {fire_sale_pct:.1%} (Random: 51-77%)")

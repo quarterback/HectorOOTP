@@ -12,6 +12,9 @@ import re
 class OOTPParser:
     """Parse OOTP HTML exports into structured data"""
     
+    # Expected column count in TeamFin.html
+    TEAMFIN_MIN_COLUMNS = 16
+    
     def __init__(self, html_dir: str = "."):
         self.html_dir = Path(html_dir)
     
@@ -42,7 +45,7 @@ class OOTPParser:
             cols = row.find_all('td')
             
             # Skip rows that don't have team data
-            if len(cols) < 16:  # Need at least 16 columns for full data
+            if len(cols) < self.TEAMFIN_MIN_COLUMNS:  # Need at least 16 columns for full data
                 continue
             
             # Parse monetary values
