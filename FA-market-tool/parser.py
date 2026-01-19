@@ -30,18 +30,26 @@ class OOTPParser:
         teams = []
         rows = data_table.find_all('tr')[1:] if data_table else []  # Skip header
         
+        team_id = 0
         for row in rows:
             cols = row.find_all('td')
-            if len(cols) < 5:
+            
+            # Skip rows that don't have team data
+            if len(cols) == 0:
                 continue
                 
+            payroll = self._parse_money(cols[3].text) if len(cols) > 3 else 0.0
+            budget = self._parse_money(cols[4].text) if len(cols) > 4 else 0.0
+            
             team_data = {
-                'team_name': cols[1].text.strip(),
-                'abbr': cols[2].text.strip(),
-                'payroll': self._parse_money(cols[3].text),
-                'budget': self._parse_money(cols[4].text),
-                'available_for_fa': self._parse_money(cols[4].text) - self._parse_money(cols[3].text),
+                'team_id': team_id,
+                'team_name': cols[1].text.strip() if len(cols) > 1 else '',
+                'abbr': cols[2].text.strip() if len(cols) > 2 else '',
+                'payroll': payroll,
+                'budget': budget,
+                'available_for_fa': budget - payroll,
             }
+            team_id += 1
             
             # Optional: Add win/loss data if available
             if len(cols) >= 7:
