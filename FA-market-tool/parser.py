@@ -38,13 +38,16 @@ class OOTPParser:
             if len(cols) == 0:
                 continue
                 
+            payroll = self._parse_money(cols[3].text) if len(cols) > 3 else 0.0
+            budget = self._parse_money(cols[4].text) if len(cols) > 4 else 0.0
+            
             team_data = {
                 'team_id': team_id,
                 'team_name': cols[1].text.strip() if len(cols) > 1 else '',
                 'abbr': cols[2].text.strip() if len(cols) > 2 else '',
-                'payroll': self._parse_money(cols[3].text) if len(cols) > 3 else 0.0,
-                'budget': self._parse_money(cols[4].text) if len(cols) > 4 else 0.0,
-                'available_for_fa': (self._parse_money(cols[4].text) if len(cols) > 4 else 0.0) - (self._parse_money(cols[3].text) if len(cols) > 3 else 0.0),
+                'payroll': payroll,
+                'budget': budget,
+                'available_for_fa': budget - payroll,
             }
             team_id += 1
             
