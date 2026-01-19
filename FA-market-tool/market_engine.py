@@ -237,6 +237,267 @@ class MarketAnalyzer:
         ].sort_values('salary', ascending=False).head(limit)
         
         return comps[['name', 'position', 'overall', 'potential', 'age', 'salary', 'source', 'team']]
+    
+    def get_salary_bands(self, position: str = None, tier: str = None, source: str = 'both') -> pd.DataFrame:
+        """
+        Get salary bands (percentiles) grouped by position, tier, and source.
+        
+        Args:
+            position: Filter by position (optional)
+            tier: Filter by tier name (optional)
+            source: 'signed', 'fa', or 'both'
+        
+        Returns:
+            DataFrame with columns: position, tier, source, count, min, p25, median, p75, max, avg
+        """
+        # Define tiers based on overall rating
+        tiers = [
+            ('Elite (5.0★)', 5.0, 5.0),
+            ('Star (4.5★)', 4.5, 4.9),
+            ('Above Average (4.0★)', 4.0, 4.4),
+            ('Average (3.5★)', 3.5, 3.9),
+            ('Below Average (3.0★)', 3.0, 3.4),
+            ('Role Player (<3.0★)', 0.0, 2.9),
+        ]
+        
+        # Filter data based on source
+        if source == 'signed':
+            data = self.all_players[self.all_players['source'] == 'Signed'].copy()
+        elif source == 'fa':
+            data = self.all_players[self.all_players['source'] == 'Free Agent'].copy()
+        else:
+            data = self.all_players.copy()
+        
+        # Apply position filter if specified
+        if position:
+            data = data[data['position'] == position]
+        
+        results = []
+        
+        # Get unique positions or use all if not filtered
+        positions = [position] if position else sorted(data['position'].unique())
+        
+        for pos in positions:
+            pos_data = data[data['position'] == pos]
+            
+            for tier_name, min_ovr, max_ovr in tiers:
+                # Skip if tier filter is specified and doesn't match
+                if tier and tier != tier_name:
+                    continue
+                
+                tier_data = pos_data[
+                    (pos_data['overall'] >= min_ovr) & 
+                    (pos_data['overall'] <= max_ovr)
+                ]
+                
+                if source == 'both':
+                    # Create separate entries for signed and FA
+                    for src in ['Signed', 'Free Agent']:
+                        src_data = tier_data[tier_data['source'] == src]
+                        if len(src_data) > 0:
+                            results.append({
+                                'position': pos,
+                                'tier': tier_name,
+                                'source': src,
+                                'count': len(src_data),
+                                'min': src_data['salary'].min(),
+                                'p25': src_data['salary'].quantile(0.25),
+                                'median': src_data['salary'].median(),
+                                'p75': src_data['salary'].quantile(0.75),
+                                'max': src_data['salary'].max(),
+                                'avg': src_data['salary'].mean(),
+                            })
+                else:
+                    # Single entry for the specified source
+                    if len(tier_data) > 0:
+                        results.append({
+                            'position': pos,
+                            'tier': tier_name,
+                            'source': 'Signed' if source == 'signed' else 'Free Agent',
+                            'count': len(tier_data),
+                            'min': tier_data['salary'].min(),
+                            'p25': tier_data['salary'].quantile(0.25),
+                            'median': tier_data['salary'].median(),
+                            'p75': tier_data['salary'].quantile(0.75),
+                            'max': tier_data['salary'].max(),
+                            'avg': tier_data['salary'].mean(),
+                        })
+        
+        return pd.DataFrame(results)
+    
+    def get_position_tier_matrix(self, metric: str = 'median', source: str = 'both') -> pd.DataFrame:
+        """
+        Create a matrix of Position (rows) x Tier (columns) with salary values.
+        
+        Args:
+            metric: 'median', 'avg', 'p25', 'p75', 'min', or 'max'
+            source: 'signed', 'fa', or 'both'
+        
+        Returns:
+            DataFrame with positions as rows, tiers as columns, salary values as cells
+        """
+        bands = self.get_salary_bands(source=source)
+        
+        if len(bands) == 0:
+            return pd.DataFrame()
+        
+        # If source is 'both', aggregate the data
+        if source == 'both':
+            # Average the metric across signed and FA
+            agg_data = bands.groupby(['position', 'tier'])[metric].mean().reset_index()
+        else:
+            agg_data = bands[['position', 'tier', metric]]
+        
+        # Pivot to create matrix
+        matrix = agg_data.pivot(index='position', columns='tier', values=metric)
+        
+        # Reorder columns to match tier hierarchy
+        tier_order = [
+            'Elite (5.0★)', 
+            'Star (4.5★)', 
+            'Above Average (4.0★)', 
+            'Average (3.5★)', 
+            'Below Average (3.0★)', 
+            'Role Player (<3.0★)'
+        ]
+        
+        # Only include columns that exist
+        available_tiers = [t for t in tier_order if t in matrix.columns]
+        matrix = matrix[available_tiers]
+        
+        return matrix
+    
+    def get_market_gap_analysis(self) -> pd.DataFrame:
+        """
+        Calculate the gap between FA demands and signed salaries by position and tier.
+        
+        Returns:
+            DataFrame with: position, tier, signed_median, fa_median, gap_amount, gap_percentage
+        """
+        # Get salary bands for both signed and FA
+        signed_bands = self.get_salary_bands(source='signed')
+        fa_bands = self.get_salary_bands(source='fa')
+        
+        results = []
+        
+        # Iterate through all position/tier combinations
+        for _, signed_row in signed_bands.iterrows():
+            pos = signed_row['position']
+            tier = signed_row['tier']
+            
+            # Find matching FA data
+            fa_row = fa_bands[
+                (fa_bands['position'] == pos) & 
+                (fa_bands['tier'] == tier)
+            ]
+            
+            if len(fa_row) > 0:
+                fa_row = fa_row.iloc[0]
+                gap_amount = fa_row['median'] - signed_row['median']
+                gap_percentage = (gap_amount / signed_row['median'] * 100) if signed_row['median'] > 0 else 0
+                
+                results.append({
+                    'position': pos,
+                    'tier': tier,
+                    'signed_median': signed_row['median'],
+                    'signed_count': signed_row['count'],
+                    'fa_median': fa_row['median'],
+                    'fa_count': fa_row['count'],
+                    'gap_amount': gap_amount,
+                    'gap_percentage': gap_percentage,
+                })
+        
+        return pd.DataFrame(results).sort_values(['position', 'tier'])
+    
+    def get_player_pricing(self, position: str, overall_min: float, overall_max: float, 
+                          age_min: int = None, age_max: int = None) -> Dict:
+        """
+        Get pricing recommendation for a player based on comparables.
+        
+        Returns:
+            {
+                'median': float,
+                'p25': float,
+                'p75': float,
+                'min': float,
+                'max': float,
+                'avg': float,
+                'signed_avg': float,
+                'fa_avg': float,
+                'comparables': DataFrame,
+                'total_comps': int,
+                'signed_comps': int,
+                'fa_comps': int
+            }
+        """
+        # Filter by position and overall rating
+        comps = self.all_players[
+            (self.all_players['position'] == position) &
+            (self.all_players['overall'] >= overall_min) &
+            (self.all_players['overall'] <= overall_max)
+        ].copy()
+        
+        # Apply age filter if specified
+        if age_min is not None:
+            comps = comps[comps['age'] >= age_min]
+        if age_max is not None:
+            comps = comps[comps['age'] <= age_max]
+        
+        # Calculate statistics
+        if len(comps) == 0:
+            return {
+                'median': 0,
+                'p25': 0,
+                'p75': 0,
+                'min': 0,
+                'max': 0,
+                'avg': 0,
+                'signed_avg': 0,
+                'fa_avg': 0,
+                'comparables': pd.DataFrame(),
+                'total_comps': 0,
+                'signed_comps': 0,
+                'fa_comps': 0
+            }
+        
+        signed_comps = comps[comps['source'] == 'Signed']
+        fa_comps = comps[comps['source'] == 'Free Agent']
+        
+        return {
+            'median': comps['salary'].median(),
+            'p25': comps['salary'].quantile(0.25),
+            'p75': comps['salary'].quantile(0.75),
+            'min': comps['salary'].min(),
+            'max': comps['salary'].max(),
+            'avg': comps['salary'].mean(),
+            'signed_avg': signed_comps['salary'].mean() if len(signed_comps) > 0 else 0,
+            'fa_avg': fa_comps['salary'].mean() if len(fa_comps) > 0 else 0,
+            'comparables': comps.sort_values('salary', ascending=False),
+            'total_comps': len(comps),
+            'signed_comps': len(signed_comps),
+            'fa_comps': len(fa_comps)
+        }
+    
+    def calculate_offer_percentile(self, offer: float, comparables: pd.DataFrame) -> float:
+        """
+        Calculate what percentile an offer represents among comparables.
+        
+        Args:
+            offer: The proposed salary offer
+            comparables: DataFrame of comparable players with 'salary' column
+        
+        Returns:
+            Percentile (0-100) where the offer falls
+        """
+        if len(comparables) == 0 or 'salary' not in comparables.columns:
+            return 50.0  # Default to median if no comparables
+        
+        salaries = comparables['salary'].values
+        # Count how many salaries are below the offer
+        below_count = np.sum(salaries < offer)
+        percentile = (below_count / len(salaries)) * 100
+        
+        return percentile
 
 
 # Usage Example

@@ -96,7 +96,7 @@ The dashboard will open in your default web browser at `http://localhost:8501`.
 
 ### 3. Navigate the Dashboard
 
-The application has 5 main tabs:
+The application has 7 main tabs:
 
 #### 📊 Market Overview
 View league-wide statistics:
@@ -106,7 +106,26 @@ View league-wide statistics:
 - Supply/demand ratio and market condition
 - Player distribution chart by tier
 
-#### 💰 Position Analysis
+#### 💰 Salary Bands
+Understand salary ranges for position/tier combinations:
+- **Box plot visualizations** showing salary distributions (min, 25th percentile, median, 75th percentile, max)
+- **Side-by-side comparison** of signed players vs free agents
+- **Interactive filters** for positions, tiers, and player source
+- **Salary band matrix table** showing Position × Tier median salaries
+- **Market gap analysis** highlighting where FAs demand more than rostered players
+- **Download capability** for salary reference data
+
+#### 🎯 Player Pricer
+Get instant market value estimates:
+- **Input form** for position, overall rating, and optional age filters
+- **Salary range recommendations** based on comparable players (25th-75th percentile)
+- **Market value estimate** (median of comparables)
+- **Percentile calculator** to evaluate proposed offers
+- **Comparable players table** showing 10-20 similar players with salaries
+- **Visual salary distribution** with histogram
+- **Market context** including signed vs FA breakdown and warnings for extreme offers
+
+#### 📍 Position Analysis
 Analyze salaries by position:
 - Filter specific positions using the multiselect
 - View average and median salary charts
@@ -117,6 +136,9 @@ Analyze salaries by position:
 Understand player quality tiers:
 - See salary distributions by overall rating
 - Compare average vs median salaries by tier
+- **Market gap visualization** with side-by-side bars for signed vs FA salaries
+- **FA Premium table** showing percentage differences
+- **Salary range boxes** for each tier (25th-75th percentile)
 - View elite player premium (how much more elite players earn)
 - Analyze tier-specific market details
 
@@ -177,6 +199,30 @@ team_stats = analyzer.get_team_market_summary()
 
 # Find comparable players
 comps = analyzer.get_comparable_players('SP', 4.0, 4.5, limit=20)
+
+# NEW: Get salary bands by position/tier/source
+salary_bands = analyzer.get_salary_bands(position='SP', tier='Elite (5.0★)', source='both')
+
+# NEW: Get position-tier matrix
+matrix = analyzer.get_position_tier_matrix(metric='median', source='both')
+
+# NEW: Get market gap analysis
+gap_analysis = analyzer.get_market_gap_analysis()
+
+# NEW: Get player pricing recommendation
+pricing = analyzer.get_player_pricing(
+    position='SP',
+    overall_min=4.0,
+    overall_max=4.5,
+    age_min=25,
+    age_max=32
+)
+
+# NEW: Calculate offer percentile
+percentile = analyzer.calculate_offer_percentile(
+    offer=5_000_000,
+    comparables=pricing['comparables']
+)
 ```
 
 ## File Structure
@@ -214,9 +260,11 @@ Percentage of team budget currently spent on payroll. Lower utilization means mo
 ## Export Capabilities
 
 All analysis tabs include CSV export functionality:
-- Position Analysis → `position_analysis.csv`
-- Team Analysis → `team_analysis.csv`
-- Player Lookup → `{position}_comparables.csv`
+- **Salary Bands** → `salary_band_matrix.csv`, `market_gap_analysis.csv`
+- **Player Pricer** → `{position}_{rating}star_comparables.csv`
+- **Position Analysis** → `position_analysis.csv`
+- **Team Analysis** → `team_analysis.csv`
+- **Player Lookup** → `{position}_comparables.csv`
 
 ## Troubleshooting
 
@@ -277,6 +325,28 @@ For issues or questions, please refer to the OOTP community forums or create an 
 
 ---
 
-**Version**: 1.0  
+**Version**: 2.0  
 **Compatible with**: OOTP 26  
 **Last Updated**: January 2026
+
+## What's New in Version 2.0
+
+### 💰 Salary Bands Tab
+- Visualize salary distributions with box plots for any position/tier combination
+- Compare signed players vs free agents side-by-side
+- View salary band matrix showing median salaries across positions and tiers
+- Analyze market gaps to understand FA premium demands
+- Download salary reference sheets for quick pricing decisions
+
+### 🎯 Player Pricer Tool
+- Instant market value estimates based on comparable players
+- Adjustable search parameters (position, overall rating, age)
+- Percentile calculator to evaluate proposed offers
+- Visual salary distributions with market context
+- Warnings for offers that are significantly above or below market value
+
+### ⭐ Enhanced Tier Analysis
+- New market gap visualizations comparing signed vs FA salaries
+- FA Premium table showing percentage differences by tier
+- Salary range boxes displaying 25th-75th percentile ranges
+- Better understanding of pricing differences between rostered and free agent players
