@@ -234,75 +234,75 @@ try:
                     "text/csv"
                 )
             
-            # Market Gap Analysis
-            st.subheader("Market Gap: Free Agents vs Signed Players")
-            st.markdown("Shows how much more FAs are demanding compared to rostered players")
-            
-            gap_analysis = analyzer.get_market_gap_analysis()
-            
-            if len(gap_analysis) > 0:
-                # Filter to selected positions and tiers
-                gap_filtered = gap_analysis[
-                    gap_analysis['position'].isin(selected_positions_bands) &
-                    gap_analysis['tier'].isin(selected_tiers)
-                ]
-                
-                if len(gap_filtered) > 0:
-                    # Create comparison chart
-                    fig = go.Figure()
-                    
-                    # Group by tier for cleaner visualization
-                    for tier in selected_tiers:
-                        tier_gap = gap_filtered[gap_filtered['tier'] == tier]
-                        
-                        if len(tier_gap) > 0:
-                            fig.add_trace(go.Bar(
-                                name=f'{tier} - Signed',
-                                x=tier_gap['position'],
-                                y=tier_gap['signed_median'],
-                                marker_color='lightblue',
-                                showlegend=True if tier == selected_tiers[0] else False,
-                                legendgroup='signed',
-                                legendgrouptitle_text='Signed'
-                            ))
-                            
-                            fig.add_trace(go.Bar(
-                                name=f'{tier} - FA',
-                                x=tier_gap['position'],
-                                y=tier_gap['fa_median'],
-                                marker_color='orange',
-                                showlegend=True if tier == selected_tiers[0] else False,
-                                legendgroup='fa',
-                                legendgrouptitle_text='Free Agent'
-                            ))
-                    
-                    fig.update_layout(
-                        barmode='group',
-                        title="Median Salary: Signed vs Free Agent by Position",
-                        xaxis_title="Position",
-                        yaxis_title="Median Salary ($)",
-                        height=400
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Gap percentage table
-                    st.markdown("**FA Premium Table**")
-                    gap_display = gap_filtered[['position', 'tier', 'signed_median', 'fa_median', 'gap_amount', 'gap_percentage']].copy()
-                    gap_display['signed_median'] = gap_display['signed_median'].apply(lambda x: f"${x/1e6:.2f}M")
-                    gap_display['fa_median'] = gap_display['fa_median'].apply(lambda x: f"${x/1e6:.2f}M")
-                    gap_display['gap_amount'] = gap_display['gap_amount'].apply(lambda x: f"${x/1e6:.2f}M")
-                    gap_display['gap_percentage'] = gap_display['gap_percentage'].apply(lambda x: f"{x:.1f}%")
-                    
-                    st.dataframe(gap_display, use_container_width=True, height=300)
-                    
-                    # Download gap analysis
-                    csv = gap_filtered.to_csv(index=False)
-                    st.download_button(
-                        "📥 Download Market Gap Analysis",
-                        csv,
-                        "market_gap_analysis.csv",
-                        "text/csv"
-                    )
+            # # Market Gap Analysis
+            # st.subheader("Market Gap: Free Agents vs Signed Players")
+            # st.markdown("Shows how much more FAs are demanding compared to rostered players")
+            # 
+            # gap_analysis = analyzer.get_market_gap_analysis()
+            # 
+            # if len(gap_analysis) > 0:
+            #     # Filter to selected positions and tiers
+            #     gap_filtered = gap_analysis[
+            #         gap_analysis['position'].isin(selected_positions_bands) &
+            #         gap_analysis['tier'].isin(selected_tiers)
+            #     ]
+            #     
+            #     if len(gap_filtered) > 0:
+            #         # Create comparison chart
+            #         fig = go.Figure()
+            #         
+            #         # Group by tier for cleaner visualization
+            #         for tier in selected_tiers:
+            #             tier_gap = gap_filtered[gap_filtered['tier'] == tier]
+            #             
+            #             if len(tier_gap) > 0:
+            #                 fig.add_trace(go.Bar(
+            #                     name=f'{tier} - Signed',
+            #                     x=tier_gap['position'],
+            #                     y=tier_gap['signed_median'],
+            #                     marker_color='lightblue',
+            #                     showlegend=True if tier == selected_tiers[0] else False,
+            #                     legendgroup='signed',
+            #                     legendgrouptitle_text='Signed'
+            #                 ))
+            #                 
+            #                 fig.add_trace(go.Bar(
+            #                     name=f'{tier} - FA',
+            #                     x=tier_gap['position'],
+            #                     y=tier_gap['fa_median'],
+            #                     marker_color='orange',
+            #                     showlegend=True if tier == selected_tiers[0] else False,
+            #                     legendgroup='fa',
+            #                     legendgrouptitle_text='Free Agent'
+            #                 ))
+            #         
+            #         fig.update_layout(
+            #             barmode='group',
+            #             title="Median Salary: Signed vs Free Agent by Position",
+            #             xaxis_title="Position",
+            #             yaxis_title="Median Salary ($)",
+            #             height=400
+            #         )
+            #         st.plotly_chart(fig, use_container_width=True)
+            #         
+            #         # Gap percentage table
+            #         st.markdown("**FA Premium Table**")
+            #         gap_display = gap_filtered[['position', 'tier', 'signed_median', 'fa_median', 'gap_amount', 'gap_percentage']].copy()
+            #         gap_display['signed_median'] = gap_display['signed_median'].apply(lambda x: f"${x/1e6:.2f}M")
+            #         gap_display['fa_median'] = gap_display['fa_median'].apply(lambda x: f"${x/1e6:.2f}M")
+            #         gap_display['gap_amount'] = gap_display['gap_amount'].apply(lambda x: f"${x/1e6:.2f}M")
+            #         gap_display['gap_percentage'] = gap_display['gap_percentage'].apply(lambda x: f"{x:.1f}%")
+            #         
+            #         st.dataframe(gap_display, use_container_width=True, height=300)
+            #         
+            #         # Download gap analysis
+            #         csv = gap_filtered.to_csv(index=False)
+            #         st.download_button(
+            #             "📥 Download Market Gap Analysis",
+            #             csv,
+            #             "market_gap_analysis.csv",
+            #             "text/csv"
+            #         )
         else:
             st.info("Please select at least one position and one tier to view salary bands.")
     
@@ -1601,9 +1601,9 @@ try:
             league_dollars_per_war = PositionalScarcityAdjuster.calculate_league_dollars_per_war(free_agents)
         col4.metric("League $/WAR", f"${league_dollars_per_war/1e6:.2f}M")
         
-        market_liquidity_ratio = liquidity['total_market_liquidity'] / overview['total_fa_demands']
-        st.caption(f"💡 **Insight:** {'Buyer\'s Market' if liquidity['total_market_liquidity'] > overview['total_fa_demands'] else 'Seller\'s Market'} - "
-                  f"Market liquidity is {market_liquidity_ratio:.1f}x total FA demands")
+        # market_liquidity_ratio = liquidity['total_market_liquidity'] / overview['total_fa_demands']
+        # st.caption(f"💡 **Insight:** {'Buyer\'s Market' if liquidity['total_market_liquidity'] > overview['total_fa_demands'] else 'Seller\'s Market'} - "
+        #           f"Market liquidity is {market_liquidity_ratio:.1f}x total FA demands")
         
         # ========== SECTION 2: OWNER SENTIMENT ANALYSIS ==========
         st.subheader("💼 Owner Sentiment Analysis")
