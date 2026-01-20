@@ -63,60 +63,83 @@ An interactive web dashboard for analyzing salary market dynamics in Out of the 
 - Team affiliations
 - Exportable player comparables
 
-### 🎯 Market Equilibrium (NEW!)
-The **Market Equilibrium Engine** brings realistic baseball economics to your league by modeling owner behavior, positional scarcity, and demand decay.
+### 💡 Free Agent Pricing Guide (NEW!)
+The **Free Agent Pricing Guide** is a simple, practical tool that answers: "What should this free agent actually sign for based on what similar players got?"
 
-#### 📊 Market Liquidity Overview
-- **Total Market Liquidity**: Sum of all teams' real buying power (not just available cash)
-- **Top-Tier Liquidity**: What the top 10 richest teams can actually spend
-- **Star Liquidity**: Money available from competitive teams (Win Now + Dynasty modes)
-- **League $/WAR**: Real-time calculation of market value per win
+Instead of theoretical calculations, it uses **real comparable contracts** to determine fair market value.
 
-#### 💼 Owner Sentiment Analysis
-Analyzes how much teams will *actually* spend based on their situation:
-- **Team Archetypes**: Dynasty (100-200%), Win Now (56-95%), Competitive (26-55%), Rebuild (10-25%)
-- **Sentiment Multipliers**: Applied to available cash to get real buying power
-- **Special Cases**: Over-budget teams (5% desperation mode), recent champions (+25% bonus)
-- **Color-coded table**: Shows all teams with archetype, multiplier, real buying power, and max player spend
-- **Smart calculations**: Accounts for win%, team mode, fan interest, and budget situation
+#### 📊 All Free Agents with Market Values
+Browse all free agents with instant pricing recommendations:
+- **Sortable table** showing FA demand vs. comparable player salaries
+- **Color-coded status**:
+  - 🟢 Fair ask (±10% of comparables)
+  - 🟡 High ask (10-25% above market)
+  - 🔴 Very high ask (>25% above market)
+  - 🔵 Discount ask (below market - good value!)
+  - ⚪ No comparables found
+- **Filters**: Position, overall rating range, age range
+- **Smart recommendations**: "Sign at ask", "Negotiate to $X-Y", or "Insufficient data"
 
-#### 🧮 Fair Market Value (FMV) Calculator
-Prevents overpaying by calculating realistic player values:
-- **Position Weights**: Premium positions (SP, SS, CF) get 100%, relievers capped at 50-60%
-- **Market Caps**: Elite players (5.0★) capped at top 5 teams' average, 4.0-4.5★ at top 15
-- **Interactive calculator**: Input position, overall, WAR, and OOTP demand
-- **Real-time feedback**: Shows if OOTP demand is too high/low vs. FMV
-- **God Mode recommendations**: Suggests realistic signing values
+#### 🔍 Individual Player Deep Dive
+Select any free agent to see detailed analysis:
+- **Player details**: Position, overall, age, demand
+- **Comparable players**: 10-20 signed players with similar overall/age
+- **Salary statistics**: Median, 25th-75th percentile range
+- **Visual charts**:
+  - Salary distribution histogram
+  - FA demand vs. comparable median
+  - Percentile indicator showing where FA's ask falls
+- **Recommended signing range**: Based on 25th-75th percentile of comparables
 
-#### ⏰ Desperation Decay Tracker
-Simulates the "Boras Correction" - players lowering demands as spring training approaches:
-- **Date slider**: Model any point in the offseason
-- **Automatic decay**: 2% per day after January 15th for players demanding above market cap
-- **Smart filtering**: View all players, decay applied, no decay yet, or high demand only
-- **Position filters**: Focus on specific positions
-- **Action recommendations**: ✅ Fair / ⚠️ Still High / 🔥 Force Sign
-- **Reason tracking**: Explains why decay was/wasn't applied
+#### 🧮 How It Works
+**Comparable Matching Algorithm:**
+1. Find signed players at same position with similar overall (±0.5★) and age (±3 years)
+2. Calculate similarity scores (100 = perfect match, factors in overall & age differences)
+3. If <5 comparables found, progressively widen search criteria
+4. Calculate median salary of comparables = Fair Market Value (FMV)
+5. Compare FA demand to FMV to generate recommendation
+
+**Similarity Scoring:**
+- Overall difference: 20 points penalty per star
+- Age difference: 2 points penalty per year
+- Higher score = more similar player
+
+**Fallback Logic:**
+- **Step 1**: Try ±0.5★ overall, ±3 years age
+- **Step 2**: Widen to ±1.0★ overall, ±3 years age
+- **Step 3**: Widen to ±1.0★ overall, ±5 years age
+- **Step 4**: Use position-wide median for that tier
+- **Last Resort**: Flag as "Insufficient data - manual evaluation needed"
 
 #### 📥 Export for God Mode
 Generate CSV reports for manual signing in Commissioner Mode:
-- **Customizable exports**: Set minimum overall rating, include/exclude FMV and decay analysis
-- **Complete data**: Player name, position, overall, WAR, original demand, FMV, adjusted demand, recommended action
+- **Customizable exports**: Set minimum overall rating, select positions to include
+- **Complete data**: Player name, position, overall, age, FA demand, recommended FMV, discount %, comparable count
 - **Ready for God Mode**: Use FMV values to force-sign players at realistic prices
+- **Export preview**: See sample data before downloading
 
-#### 📈 Market Summary Statistics
-- Players with decay applied
-- Average decay percentage
-- Players above FMV
-- Avg FMV vs Demand ratio
+#### 📈 What You Get
+- **97%+ of FAs** have 5+ comparable players (high confidence)
+- **Median FMV** based on actual signed contracts
+- **Percentile ranges** (25th-75th) for negotiation guidance
+- **Clear recommendations** for every player
 
 **Use Case Example**: 
-A 5.0★ SP demands $40M, but only 2 teams have >$30M to spend. The engine calculates:
-1. League $/WAR = $0.61M → Base value = $3.05M (5.0 WAR × $0.61M)
-2. Position weight = 100% (SP) → Position-adjusted = $3.05M
-3. Market cap = Top 5 teams avg = $33.85M → FMV = $3.05M (below cap)
-4. January 15 passes, demand exceeds top 3 teams → Decay applies 2%/day
-5. By February 1st: -34% decay → Adjusted demand = $26.4M
-6. Recommendation: Sign at $3-4M (FMV range) in God Mode
+A 4.0★ SP, age 28, demands $12.5M:
+```
+Comparables Found: 35 signed players
+- Overall range: 3.5★ - 4.5★
+- Age range: 25-31
+- Median salary: $1.8M
+- 25th percentile: $0.8M
+- 75th percentile: $4.8M
+
+FA Ask: $12.5M
+FMV: $1.8M
+Difference: +594% (FA asking way too much)
+
+Recommendation: Negotiate to $0.8M - $4.8M range
+```
 
 ## Installation
 
@@ -237,7 +260,7 @@ Find comparable players:
 - See salary statistics (avg, median, range)
 - Download comparables as CSV
 
-#### 🎯 Budget Scenarios (New!)
+#### 🎯 Budget Scenarios
 Model different financial scenarios for teams:
 - **Select any team** to analyze
 - **Configure scenario** - adjust wins/losses, postseason results, team mode, fan interest
@@ -247,14 +270,15 @@ Model different financial scenarios for teams:
 - **Playoff bonus modeling** - see impact of postseason success on owner investment
 - **Fire Sale mode** - simulate teardown scenarios with randomized owner reduction
 
-#### 🎯 Market Equilibrium (New!)
-Analyze realistic market dynamics with advanced economic modeling:
-- **Market Liquidity Overview** - see real buying power across the league (total, top-tier, star liquidity)
-- **Owner Sentiment Analysis** - table of all teams with archetype, sentiment multiplier, and real buying power
-- **FMV Calculator** - calculate Fair Market Value for any player with position weights and market caps
-- **Desperation Decay Tracker** - model demand reduction over time (2%/day after Jan 15)
+#### 💡 Free Agent Pricing Guide (New!)
+Simple, practical pricing tool based on comparable contracts:
+- **All Free Agents Table** - sortable view with color-coded recommendations (fair, high, very high, discount)
+- **Individual Player Analysis** - detailed breakdown with 10-20 comparable players
+- **Visual Charts** - salary distribution, percentile indicators, recommended ranges
+- **Comparable Matching** - smart algorithm finds similar players by position, overall, and age
+- **Fallback Logic** - progressively widens search if few comparables found
 - **Export for God Mode** - generate CSV with FMV recommendations for manual signings
-- **Market Summary Statistics** - overview of decay applied, players above FMV, and market health
+- **97%+ Coverage** - most players have 5+ comparables for high confidence
 
 ## Owner Investment System
 
