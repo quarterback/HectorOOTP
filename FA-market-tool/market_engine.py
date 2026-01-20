@@ -820,6 +820,316 @@ class MarketAnalyzer:
             'overall': overall,
             'war': war
         }
+    
+    # ========== COMPARABLE-BASED MARKET ANALYZER METHODS ==========
+    
+    def calculate_similarity_score(self, fa_overall: float, fa_age: int, 
+                                   comp_overall: float, comp_age: int) -> float:
+        """
+        Calculate similarity score between a free agent and a comparable player.
+        
+        Score = 100 - (overall_diff_weight * overall_diff + age_diff_weight * age_diff)
+        Weights: Overall difference = 20 points per star, Age difference = 2 points per year
+        Higher score = more similar
+        
+        Args:
+            fa_overall: Free agent's overall rating (e.g., 4.0)
+            fa_age: Free agent's age
+            comp_overall: Comparable player's overall rating
+            comp_age: Comparable player's age
+        
+        Returns:
+            Similarity score (0-100, higher is more similar)
+        """
+        overall_diff = abs(fa_overall - comp_overall)
+        age_diff = abs(fa_age - comp_age)
+        
+        # Weights: 20 points per star difference, 2 points per year difference
+        overall_penalty = overall_diff * 20
+        age_penalty = age_diff * 2
+        
+        score = 100 - (overall_penalty + age_penalty)
+        return max(0, score)  # Don't go below 0
+    
+    def get_comparable_contracts(self, fa_overall: float, fa_age: int, fa_position: str,
+                                overall_tolerance: float = 0.5, 
+                                age_tolerance: int = 3) -> pd.DataFrame:
+        """
+        Find signed players with similar overall rating and age.
+        
+        Args:
+            fa_overall: Free agent's overall rating (e.g., 4.0)
+            fa_age: Free agent's age
+            fa_position: Position (for positional grouping)
+            overall_tolerance: +/- stars to search (default 0.5)
+            age_tolerance: +/- years to search (default 3)
+        
+        Returns:
+            DataFrame with comparable signed contracts including:
+            - name, position, overall, age, salary, contract_value, total_years
+            - similarity_score column
+            - Similar players sorted by relevance (similarity score descending)
+        """
+        # Filter signed players by position, overall, and age
+        comparables = self.signed[
+            (self.signed['position'] == fa_position) &
+            (self.signed['overall'] >= fa_overall - overall_tolerance) &
+            (self.signed['overall'] <= fa_overall + overall_tolerance) &
+            (self.signed['age'] >= fa_age - age_tolerance) &
+            (self.signed['age'] <= fa_age + age_tolerance)
+        ].copy()
+        
+        # Calculate similarity scores
+        comparables['similarity_score'] = comparables.apply(
+            lambda row: self.calculate_similarity_score(
+                fa_overall, fa_age, row['overall'], row['age']
+            ),
+            axis=1
+        )
+        
+        # Sort by similarity score (highest first)
+        comparables = comparables.sort_values('similarity_score', ascending=False)
+        
+        # Select relevant columns
+        cols = ['name', 'position', 'overall', 'age', 'salary', 'similarity_score']
+        
+        # Add optional columns if they exist
+        optional_cols = ['contract_value', 'total_years', 'team']
+        for col in optional_cols:
+            if col in comparables.columns:
+                cols.append(col)
+        
+        return comparables[cols].reset_index(drop=True)
+    
+    def calculate_market_fmv_for_all_fas(self) -> pd.DataFrame:
+        """
+        For each free agent:
+        1. Find 5-15 comparable signed players (similar age + overall)
+        2. Calculate median/average signed salary
+        3. Compare FA demand to comparable median
+        4. Return: name, pos, overall, age, demand, comparable_median, comparable_count, 
+                  discount_needed (% FA should reduce ask), recommendation
+        
+        Handles edge cases:
+        - If <5 comparables found, widen search criteria
+        - If still none, use position/tier averages as fallback
+        - Flag players with insufficient comparables
+        
+        Returns:
+            DataFrame with FMV analysis for all free agents
+        """
+        results = []
+        
+        for _, fa in self.free_agents.iterrows():
+            fa_name = fa['name']
+            fa_pos = fa['position']
+            fa_overall = fa['overall']
+            fa_age = fa['age']
+            fa_demand = fa['demand']
+            
+            # Try to find comparables with default tolerances
+            comparables = self.get_comparable_contracts(
+                fa_overall, fa_age, fa_pos, 
+                overall_tolerance=0.5, age_tolerance=3
+            )
+            
+            # Fallback 1: Widen overall tolerance
+            if len(comparables) < 5:
+                comparables = self.get_comparable_contracts(
+                    fa_overall, fa_age, fa_pos,
+                    overall_tolerance=1.0, age_tolerance=3
+                )
+            
+            # Fallback 2: Widen age tolerance
+            if len(comparables) < 5:
+                comparables = self.get_comparable_contracts(
+                    fa_overall, fa_age, fa_pos,
+                    overall_tolerance=1.0, age_tolerance=5
+                )
+            
+            # Fallback 3: Use position-wide median for overall tier
+            if len(comparables) < 5:
+                # Get all signed players at this position within ±1 star
+                pos_tier = self.signed[
+                    (self.signed['position'] == fa_pos) &
+                    (self.signed['overall'] >= fa_overall - 1.0) &
+                    (self.signed['overall'] <= fa_overall + 1.0)
+                ]
+                
+                if len(pos_tier) > 0:
+                    comparable_median = pos_tier['salary'].median()
+                    comparable_avg = pos_tier['salary'].mean()
+                    comparable_p25 = pos_tier['salary'].quantile(0.25)
+                    comparable_p75 = pos_tier['salary'].quantile(0.75)
+                    comparable_count = len(pos_tier)
+                    recommendation_note = "Position/tier fallback"
+                else:
+                    # Last resort: flag as insufficient data
+                    comparable_median = 0
+                    comparable_avg = 0
+                    comparable_p25 = 0
+                    comparable_p75 = 0
+                    comparable_count = 0
+                    recommendation_note = "Insufficient data - manual evaluation needed"
+            else:
+                # We have enough comparables
+                comparable_median = comparables['salary'].median()
+                comparable_avg = comparables['salary'].mean()
+                comparable_p25 = comparables['salary'].quantile(0.25)
+                comparable_p75 = comparables['salary'].quantile(0.75)
+                comparable_count = len(comparables)
+                recommendation_note = ""
+            
+            # Calculate difference and discount needed
+            if comparable_median > 0:
+                difference_amount = fa_demand - comparable_median
+                difference_pct = (difference_amount / comparable_median) * 100
+                
+                # Generate recommendation
+                if comparable_count == 0:
+                    recommendation = "Insufficient comparables - manual evaluation needed"
+                elif abs(difference_pct) <= 10:
+                    recommendation = "Sign at ask - fair price"
+                elif difference_pct > 25:
+                    recommendation = f"Negotiate to ${comparable_p25/1e6:.1f}M - ${comparable_p75/1e6:.1f}M range"
+                elif difference_pct > 10:
+                    recommendation = f"Negotiate to ${comparable_median/1e6:.1f}M"
+                elif difference_pct < -10:
+                    recommendation = f"Discount ask - below market by {abs(difference_pct):.0f}%"
+                else:
+                    recommendation = "Sign at ask - within market range"
+            else:
+                difference_amount = 0
+                difference_pct = 0
+                recommendation = recommendation_note
+            
+            results.append({
+                'name': fa_name,
+                'position': fa_pos,
+                'overall': fa_overall,
+                'age': fa_age,
+                'demand': fa_demand,
+                'comparable_median': comparable_median,
+                'comparable_avg': comparable_avg,
+                'comparable_p25': comparable_p25,
+                'comparable_p75': comparable_p75,
+                'comparable_count': comparable_count,
+                'difference_amount': difference_amount,
+                'difference_pct': difference_pct,
+                'recommendation': recommendation
+            })
+        
+        return pd.DataFrame(results)
+    
+    def get_fa_detailed_analysis(self, fa_name: str, max_comparables: int = 20) -> Dict:
+        """
+        Get detailed analysis for a specific free agent including:
+        - FA details (name, position, overall, age, demand)
+        - Comparable players (up to max_comparables)
+        - Salary statistics
+        - Recommended signing range
+        
+        Args:
+            fa_name: Name of the free agent
+            max_comparables: Maximum number of comparables to return (default 20)
+        
+        Returns:
+            Dictionary with:
+            - fa_details: Dict with FA info
+            - comparables: DataFrame of comparable players
+            - stats: Dict with median, p25, p75, avg
+            - recommendation: Dict with signing range and percentile info
+        """
+        # Find the free agent
+        fa = self.free_agents[self.free_agents['name'] == fa_name]
+        
+        if len(fa) == 0:
+            return {
+                'error': f"Free agent '{fa_name}' not found",
+                'fa_details': None,
+                'comparables': pd.DataFrame(),
+                'stats': {},
+                'recommendation': {}
+            }
+        
+        fa = fa.iloc[0]
+        
+        # Get FA details
+        fa_details = {
+            'name': fa['name'],
+            'position': fa['position'],
+            'overall': fa['overall'],
+            'age': fa['age'],
+            'demand': fa['demand']
+        }
+        
+        # Get comparables with progressive fallback
+        comparables = self.get_comparable_contracts(
+            fa['overall'], fa['age'], fa['position'],
+            overall_tolerance=0.5, age_tolerance=3
+        )
+        
+        # Fallback 1: Widen overall tolerance
+        if len(comparables) < 5:
+            comparables = self.get_comparable_contracts(
+                fa['overall'], fa['age'], fa['position'],
+                overall_tolerance=1.0, age_tolerance=3
+            )
+        
+        # Fallback 2: Widen age tolerance
+        if len(comparables) < 5:
+            comparables = self.get_comparable_contracts(
+                fa['overall'], fa['age'], fa['position'],
+                overall_tolerance=1.0, age_tolerance=5
+            )
+        
+        # Limit to max_comparables
+        comparables = comparables.head(max_comparables)
+        
+        # Calculate statistics
+        if len(comparables) > 0:
+            stats = {
+                'median': comparables['salary'].median(),
+                'p25': comparables['salary'].quantile(0.25),
+                'p75': comparables['salary'].quantile(0.75),
+                'avg': comparables['salary'].mean(),
+                'min': comparables['salary'].min(),
+                'max': comparables['salary'].max(),
+                'count': len(comparables),
+                'overall_range': f"{comparables['overall'].min():.1f}★ - {comparables['overall'].max():.1f}★",
+                'age_range': f"{comparables['age'].min()}-{comparables['age'].max()}"
+            }
+            
+            # Calculate FA demand percentile
+            demand_percentile = self.calculate_offer_percentile(fa['demand'], comparables)
+            
+            recommendation = {
+                'recommended_min': stats['p25'],
+                'recommended_max': stats['p75'],
+                'fmv': stats['median'],
+                'demand_percentile': demand_percentile,
+                'difference_pct': ((fa['demand'] - stats['median']) / stats['median'] * 100) if stats['median'] > 0 else 0
+            }
+        else:
+            stats = {
+                'median': 0, 'p25': 0, 'p75': 0, 'avg': 0, 
+                'min': 0, 'max': 0, 'count': 0,
+                'overall_range': 'N/A', 'age_range': 'N/A'
+            }
+            recommendation = {
+                'recommended_min': 0,
+                'recommended_max': 0,
+                'fmv': 0,
+                'demand_percentile': 50,
+                'difference_pct': 0
+            }
+        
+        return {
+            'fa_details': fa_details,
+            'comparables': comparables,
+            'stats': stats,
+            'recommendation': recommendation
+        }
 
 
 # Usage Example
