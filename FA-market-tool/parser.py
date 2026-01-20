@@ -184,11 +184,15 @@ class OOTPParser:
         """Enrich signed players with full team data from TeamFin.html
         
         Args:
-            signed_df: DataFrame of signed players with 'team' column containing team_city
+            signed_df: DataFrame of signed players with 'team' column containing team city name
+                      (e.g., 'Montreal', 'Toronto', 'Nashville')
             teams_df: DataFrame of teams from parse_team_financials()
         
         Returns:
             DataFrame with enriched team columns added
+        
+        Note:
+            The 'team' column in signed.html corresponds to team_city in TeamFin.html
         """
         # Create a copy to avoid modifying original
         enriched = signed_df.copy()
@@ -238,10 +242,10 @@ class OOTPParser:
     def _parse_money(text: str) -> float:
         """Convert '$12. 5m' or '$600k' to float"""
         text = text.strip().replace('$', '').replace(',', '')
-        if 'm' in text. lower():
+        if 'm' in text.lower():
             return float(text.lower().replace('m', '')) * 1_000_000
         elif 'k' in text.lower():
-            return float(text. lower().replace('k', '')) * 1_000
+            return float(text.lower().replace('k', '')) * 1_000
         elif text == '-' or not text:
             return 0.0
         return float(text)
@@ -256,7 +260,7 @@ class OOTPParser:
     def _is_number(text: str) -> bool:
         """Check if text can be converted to float"""
         try:
-            float(text. strip())
+            float(text.strip())
             return True
         except (ValueError, AttributeError):
             return False

@@ -204,8 +204,8 @@ class MarketAnalyzer:
         signed['source'] = 'Signed'
         signed['demand'] = signed['salary']
         
-        # Ensure both have same columns - include enriched team columns if available
-        common_cols = ['position', 'name', 'age', 'overall', 'potential', 'salary', 'source', 'team']
+        # Base columns that should exist in both datasets
+        base_cols = ['position', 'name', 'age', 'overall', 'potential', 'salary', 'source', 'team']
         
         # Add enriched team columns if they exist in signed data
         enriched_team_cols = ['team_abbr', 'team_full_name', 'team_name', 'team_city', 'team_mode', 
@@ -214,11 +214,11 @@ class MarketAnalyzer:
                              'team_last_year_wins', 'team_last_year_losses']
         
         available_enriched_cols = [col for col in enriched_team_cols if col in signed.columns]
-        if available_enriched_cols:
-            common_cols.extend(available_enriched_cols)
+        common_cols = base_cols + available_enriched_cols
         
-        fa_subset = fa[common_cols].copy() if all(col in fa.columns for col in common_cols) else fa[['position', 'name', 'age', 'overall', 'potential', 'salary', 'source', 'team']].copy()
-        signed_subset = signed[common_cols].copy() if all(col in signed.columns for col in common_cols) else signed[['position', 'name', 'age', 'overall', 'potential', 'salary', 'source', 'team']].copy()
+        # Create subsets with common columns, falling back to base columns if needed
+        fa_subset = fa[base_cols].copy() if not all(col in fa.columns for col in common_cols) else fa[common_cols].copy()
+        signed_subset = signed[common_cols].copy() if all(col in signed.columns for col in common_cols) else signed[base_cols].copy()
         
         # Ensure both dataframes have the same columns
         all_cols = set(fa_subset.columns) | set(signed_subset.columns)
