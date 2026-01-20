@@ -823,6 +823,10 @@ class MarketAnalyzer:
     
     # ========== COMPARABLE-BASED MARKET ANALYZER METHODS ==========
     
+    # Similarity scoring weights (configurable)
+    SIMILARITY_OVERALL_WEIGHT = 20  # Points penalty per star difference
+    SIMILARITY_AGE_WEIGHT = 2       # Points penalty per year difference
+    
     def calculate_similarity_score(self, fa_overall: float, fa_age: int, 
                                    comp_overall: float, comp_age: int) -> float:
         """
@@ -844,9 +848,9 @@ class MarketAnalyzer:
         overall_diff = abs(fa_overall - comp_overall)
         age_diff = abs(fa_age - comp_age)
         
-        # Weights: 20 points per star difference, 2 points per year difference
-        overall_penalty = overall_diff * 20
-        age_penalty = age_diff * 2
+        # Apply weights
+        overall_penalty = overall_diff * self.SIMILARITY_OVERALL_WEIGHT
+        age_penalty = age_diff * self.SIMILARITY_AGE_WEIGHT
         
         score = 100 - (overall_penalty + age_penalty)
         return max(0, score)  # Don't go below 0

@@ -1586,6 +1586,7 @@ try:
         st.markdown("**Simple, practical tool:** What should this free agent actually sign for based on what similar players got?")
         
         # Calculate FMV for all FAs (cache this calculation)
+        # Note: Cache is cleared on app reload or when underlying data changes
         @st.cache_data
         def get_all_fa_fmv():
             return analyzer.calculate_market_fmv_for_all_fas()
@@ -1874,10 +1875,10 @@ try:
                     (fmv_df['position'].isin(export_positions))
                 ].copy()
                 
-                # Calculate discount %
+                # Calculate discount % (positive = FA asking too much, negative = discount)
                 export_df['discount_pct'] = export_df.apply(
-                    lambda row: ((row['demand'] - row['comparable_median']) / row['demand'] * 100)
-                    if row['comparable_median'] > 0 and row['demand'] > 0 else 0,
+                    lambda row: ((row['demand'] - row['comparable_median']) / row['comparable_median'] * 100)
+                    if row['comparable_median'] > 0 else 0,
                     axis=1
                 )
                 
