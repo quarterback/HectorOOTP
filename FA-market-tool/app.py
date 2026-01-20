@@ -29,6 +29,10 @@ def load_data():
     teams = parser.parse_team_financials(filename="TeamFin.html")
     fas = parser.parse_free_agents(filename="fafinancials.html")
     signed = parser.parse_signed_players(filename="signed.html")
+    
+    # Enrich signed players with full team data
+    signed = parser.enrich_signed_players_with_team_data(signed, teams)
+    
     return teams, fas, signed
 
 try:
@@ -444,7 +448,16 @@ try:
             st.subheader("Comparable Players")
             st.markdown(f"Showing up to 20 most similar players")
             
-            comps_display = comps_df[['name', 'position', 'overall', 'potential', 'age', 'salary', 'source', 'team']].head(20).copy()
+            # Use team_full_name if available, otherwise fall back to team
+            display_cols = ['name', 'position', 'overall', 'potential', 'age', 'salary', 'source']
+            if 'team_full_name' in comps_df.columns:
+                display_cols.append('team_full_name')
+                comps_display = comps_df[display_cols].head(20).copy()
+                comps_display.rename(columns={'team_full_name': 'team'}, inplace=True)
+            else:
+                display_cols.append('team')
+                comps_display = comps_df[display_cols].head(20).copy()
+            
             comps_display['salary'] = comps_display['salary'].apply(lambda x: f"${x/1e6:.2f}M")
             comps_display['overall'] = comps_display['overall'].apply(lambda x: f"{x}★")
             comps_display['potential'] = comps_display['potential'].apply(lambda x: f"{x}★")
@@ -1019,6 +1032,13 @@ try:
         # Format display
         if len(comps) > 0:
             comps_display = comps.copy()
+            
+            # Use team_full_name if available
+            if 'team_full_name' in comps_display.columns:
+                # Replace 'team' column with team_full_name for display
+                comps_display['team'] = comps_display['team_full_name']
+                comps_display = comps_display.drop(columns=['team_full_name'])
+            
             comps_display['salary'] = comps_display['salary'].apply(lambda x: f"${x/1e6:.2f}M")
             comps_display['overall'] = comps_display['overall'].apply(lambda x: f"{x}★")
             comps_display['potential'] = comps_display['potential'].apply(lambda x: f"{x}★")
