@@ -204,11 +204,29 @@ class MarketAnalyzer:
         signed['source'] = 'Signed'
         signed['demand'] = signed['salary']
         
-        # Ensure both have same columns
+        # Ensure both have same columns - include enriched team columns if available
         common_cols = ['position', 'name', 'age', 'overall', 'potential', 'salary', 'source', 'team']
         
-        fa_subset = fa[common_cols].copy()
-        signed_subset = signed[common_cols].copy()
+        # Add enriched team columns if they exist in signed data
+        enriched_team_cols = ['team_abbr', 'team_full_name', 'team_name', 'team_city', 'team_mode', 
+                             'team_win_pct', 'team_budget', 'team_payroll', 'team_budget_space',
+                             'team_fan_interest', 'team_revenue', 'team_expenses', 
+                             'team_last_year_wins', 'team_last_year_losses']
+        
+        available_enriched_cols = [col for col in enriched_team_cols if col in signed.columns]
+        if available_enriched_cols:
+            common_cols.extend(available_enriched_cols)
+        
+        fa_subset = fa[common_cols].copy() if all(col in fa.columns for col in common_cols) else fa[['position', 'name', 'age', 'overall', 'potential', 'salary', 'source', 'team']].copy()
+        signed_subset = signed[common_cols].copy() if all(col in signed.columns for col in common_cols) else signed[['position', 'name', 'age', 'overall', 'potential', 'salary', 'source', 'team']].copy()
+        
+        # Ensure both dataframes have the same columns
+        all_cols = set(fa_subset.columns) | set(signed_subset.columns)
+        for col in all_cols:
+            if col not in fa_subset.columns:
+                fa_subset[col] = None
+            if col not in signed_subset.columns:
+                signed_subset[col] = None
         
         combined = pd.concat([fa_subset, signed_subset], ignore_index=True)
         
@@ -434,7 +452,12 @@ class MarketAnalyzer:
             (self.all_players['overall'] <= overall_max)
         ].sort_values('salary', ascending=False).head(limit)
         
-        return comps[['name', 'position', 'overall', 'potential', 'age', 'salary', 'source', 'team']]
+        # Include team_full_name if available, otherwise fall back to team
+        base_cols = ['name', 'position', 'overall', 'potential', 'age', 'salary', 'source', 'team']
+        if 'team_full_name' in comps.columns:
+            base_cols.append('team_full_name')
+        
+        return comps[base_cols]
     
     def get_salary_bands(self, position: str = None, tier: str = None, source: str = 'both') -> pd.DataFrame:
         """

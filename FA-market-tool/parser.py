@@ -180,6 +180,60 @@ class OOTPParser:
         
         return pd.DataFrame(players)
     
+    def enrich_signed_players_with_team_data(self, signed_df: pd.DataFrame, teams_df: pd.DataFrame) -> pd.DataFrame:
+        """Enrich signed players with full team data from TeamFin.html
+        
+        Args:
+            signed_df: DataFrame of signed players with 'team' column containing team_city
+            teams_df: DataFrame of teams from parse_team_financials()
+        
+        Returns:
+            DataFrame with enriched team columns added
+        """
+        # Create a copy to avoid modifying original
+        enriched = signed_df.copy()
+        
+        # Create lookup dictionary: team_city -> team data
+        team_lookup = {}
+        for _, team_row in teams_df.iterrows():
+            team_city = team_row['team_city']
+            # Check if team_name already contains team_city
+            team_name = team_row['team_name']
+            if team_name.startswith(team_city):
+                # Team name already includes city (e.g., "Arizona Diamondbacks")
+                team_full_name = team_name
+            else:
+                # Team name doesn't include city (e.g., "Cubs" -> "Chicago Cubs")
+                team_full_name = f"{team_city} {team_name}"
+            
+            team_lookup[team_city] = {
+                'team_abbr': team_row['abbr'],
+                'team_full_name': team_full_name,
+                'team_name': team_row['team_name'],
+                'team_city': team_row['team_city'],
+                'team_mode': team_row['mode'],
+                'team_win_pct': team_row['win_pct'],
+                'team_budget': team_row['budget'],
+                'team_payroll': team_row['payroll'],
+                'team_budget_space': team_row['budget_space'],
+                'team_fan_interest': team_row['fan_interest'],
+                'team_revenue': team_row['revenue'],
+                'team_expenses': team_row['expenses'],
+                'team_last_year_wins': team_row['last_year_wins'],
+                'team_last_year_losses': team_row['last_year_losses'],
+            }
+        
+        # Add enriched columns
+        for col_name in ['team_abbr', 'team_full_name', 'team_name', 'team_city', 'team_mode', 
+                        'team_win_pct', 'team_budget', 'team_payroll', 'team_budget_space',
+                        'team_fan_interest', 'team_revenue', 'team_expenses', 
+                        'team_last_year_wins', 'team_last_year_losses']:
+            enriched[col_name] = enriched['team'].map(
+                lambda city: team_lookup.get(city, {}).get(col_name, None)
+            )
+        
+        return enriched
+    
     @staticmethod
     def _parse_money(text: str) -> float:
         """Convert '$12. 5m' or '$600k' to float"""
