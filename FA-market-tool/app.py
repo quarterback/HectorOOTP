@@ -11,10 +11,11 @@ import random
 import datetime
 from market_engine import MarketAnalyzer, OwnerInvestmentCalculator
 from parser import OOTPParser
-from market_liquidity import MarketLiquidityAnalyzer
-from sentiment_logic import OwnerSentimentEngine
-from positional_scarcity import PositionalScarcityAdjuster
-from desperation_decay import DesperationDecayCalculator
+# Note: Theoretical modules kept as files but not imported
+# from market_liquidity import MarketLiquidityAnalyzer
+# from sentiment_logic import OwnerSentimentEngine
+# from positional_scarcity import PositionalScarcityAdjuster
+# from desperation_decay import DesperationDecayCalculator
 
 # Win percentage tier bins for heatmap visualization
 WIN_PCT_BINS = [0, 0.432, 0.469, 0.506, 0.543, 0.580, 0.617, 1.0]
@@ -54,7 +55,7 @@ try:
         "🏢 Team Analysis",
         "🔍 Player Lookup",
         "🎯 Budget Scenarios",
-        "🎯 Market Equilibrium"
+        "💡 FA Pricing Guide"
     ])
     
     # ========== TAB 1: MARKET OVERVIEW ==========
@@ -1579,274 +1580,313 @@ try:
                 except Exception as e:
                     st.error(f"Error loading configuration: {e}")
     
-    # ========== TAB 9: MARKET EQUILIBRIUM ==========
+    # ========== TAB 9: FREE AGENT PRICING GUIDE ==========
     with tab9:
-        st.header("🎯 Market Equilibrium Engine")
-        st.markdown("Analyze realistic market dynamics with owner sentiment, positional scarcity, and demand decay")
+        st.header("💡 Free Agent Pricing Guide")
+        st.markdown("**Simple, practical tool:** What should this free agent actually sign for based on what similar players got?")
         
-        # Date selector for decay calculations
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            current_date = st.date_input(
-                "Simulation Date",
-                value=datetime.date(2068, 1, 1),
-                help="Select current date for desperation decay calculations"
-            )
-        with col2:
-            st.metric("Days Past Jan 15", max(0, (current_date - datetime.date(current_date.year, 1, 15)).days))
+        # Calculate FMV for all FAs (cache this calculation)
+        @st.cache_data
+        def get_all_fa_fmv():
+            return analyzer.calculate_market_fmv_for_all_fas()
         
-        # Get market equilibrium data
-        try:
-            equilibrium_data = analyzer.get_market_equilibrium_data(current_date)
-            liquidity = equilibrium_data['liquidity']
-            sentiment_df = equilibrium_data['sentiment']
-            fmv_df = equilibrium_data['fmv']
-            decay_df = equilibrium_data['decay']
-        except Exception as e:
-            st.error(f"Error calculating market equilibrium: {e}")
-            st.stop()
+        fmv_df = get_all_fa_fmv()
         
-        # ========== SECTION 1: MARKET LIQUIDITY OVERVIEW ==========
-        st.subheader("📊 Market Liquidity Overview")
+        # ========== SECTION 1: ALL FREE AGENTS WITH FMV ==========
+        st.subheader("📊 All Free Agents with Market Values")
         
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Market Liquidity", f"${liquidity['total_market_liquidity']/1e6:.1f}M")
-        col2.metric("Top-Tier Liquidity (Top 10)", f"${liquidity['top_tier_liquidity']/1e6:.1f}M")
-        col3.metric("Star Liquidity (Competitive)", f"${liquidity['star_liquidity']/1e6:.1f}M")
-        
-        # Calculate league $/WAR
-        if 'league_dollars_per_war' in fmv_df.columns and len(fmv_df) > 0:
-            league_dollars_per_war = fmv_df['league_dollars_per_war'].iloc[0]
-        else:
-            league_dollars_per_war = PositionalScarcityAdjuster.calculate_league_dollars_per_war(free_agents)
-        col4.metric("League $/WAR", f"${league_dollars_per_war/1e6:.2f}M")
-        
-        # market_liquidity_ratio = liquidity['total_market_liquidity'] / overview['total_fa_demands']
-        # st.caption(f"💡 **Insight:** {'Buyer\'s Market' if liquidity['total_market_liquidity'] > overview['total_fa_demands'] else 'Seller\'s Market'} - "
-        #           f"Market liquidity is {market_liquidity_ratio:.1f}x total FA demands")
-        
-        # ========== SECTION 2: OWNER SENTIMENT ANALYSIS ==========
-        st.subheader("💼 Owner Sentiment Analysis")
-        
-        # Prepare sentiment display data
-        sentiment_display = sentiment_df[[
-            'team_name', 'available_cash', 'archetype', 'sentiment_multiplier', 
-            'real_buying_power', 'max_player_spend', 'win_pct', 'mode', 'fan_interest'
-        ]].copy()
-        
-        # Format currency columns
-        sentiment_display['available_cash'] = sentiment_display['available_cash'].apply(lambda x: f"${x/1e6:.1f}M")
-        sentiment_display['real_buying_power'] = sentiment_display['real_buying_power'].apply(lambda x: f"${x/1e6:.1f}M")
-        sentiment_display['max_player_spend'] = sentiment_display['max_player_spend'].apply(lambda x: f"${x/1e6:.1f}M")
-        sentiment_display['sentiment_multiplier'] = sentiment_display['sentiment_multiplier'].apply(lambda x: f"{x*100:.0f}%")
-        sentiment_display['win_pct'] = sentiment_display['win_pct'].apply(lambda x: f"{x:.3f}")
-        
-        # Add archetype emoji
-        archetype_emoji = {
-            'Dynasty': '🟢',
-            'Win Now': '🔵',
-            'Competitive': '🟡',
-            'Rebuild': '🔴'
-        }
-        sentiment_display['Archetype'] = sentiment_display['archetype'].apply(
-            lambda x: f"{archetype_emoji.get(x, '⚪')} {x}"
-        )
-        
-        # Rename columns for display
-        sentiment_display = sentiment_display.rename(columns={
-            'team_name': 'Team',
-            'available_cash': 'Available Cash',
-            'sentiment_multiplier': 'Multiplier',
-            'real_buying_power': 'Real Buying Power',
-            'max_player_spend': 'Max Player Spend',
-            'win_pct': 'Win %',
-            'mode': 'Mode',
-            'fan_interest': 'Fan Interest'
-        })
-        
-        # Sort by real buying power
-        sentiment_display = sentiment_display.sort_values('Real Buying Power', ascending=False)
-        
-        st.dataframe(
-            sentiment_display[['Team', 'Archetype', 'Available Cash', 'Multiplier', 
-                             'Real Buying Power', 'Max Player Spend', 'Win %', 'Mode', 'Fan Interest']],
-            use_container_width=True,
-            height=400
-        )
-        
-        # Legend
-        st.caption("🟢 Dynasty (100-200%) | 🔵 Win Now (56-95%) | 🟡 Competitive (26-55%) | 🔴 Rebuild (10-25%)")
-        
-        # ========== SECTION 3: FMV CALCULATOR ==========
-        st.subheader("🧮 Fair Market Value (FMV) Calculator")
-        
-        col1, col2 = st.columns(2)
+        # Filters
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            st.markdown("**Input Player Details:**")
-            calc_position = st.selectbox(
-                "Position",
-                options=['SP', 'RP', 'CL', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH'],
-                index=0
-            )
-            calc_overall = st.slider("Overall Rating", 0.5, 5.0, 4.0, 0.5)
-            calc_war = st.number_input("Projected WAR", 0.0, 15.0, 3.0, 0.5)
-            calc_demand = st.number_input("OOTP Demand ($)", 0, 100_000_000, 10_000_000, 1_000_000)
-        
-        with col2:
-            st.markdown("**FMV Calculation:**")
-            if st.button("Calculate FMV", type="primary"):
-                fmv_result = analyzer.calculate_fmv_for_player(
-                    calc_position, calc_overall, calc_war, calc_demand
-                )
-                
-                st.metric("Base Value (WAR × $/WAR)", f"${fmv_result['base_value']/1e6:.2f}M")
-                st.metric("Position Weight", f"{fmv_result['position_weight']*100:.0f}%")
-                st.metric("Position-Adjusted Value", f"${fmv_result['position_adjusted_value']/1e6:.2f}M")
-                
-                if fmv_result['market_cap']:
-                    st.metric("Market Cap (Tier Limit)", f"${fmv_result['market_cap']/1e6:.2f}M")
-                
-                st.metric("**Fair Market Value (FMV)**", f"${fmv_result['fmv']/1e6:.2f}M", 
-                         delta=f"{fmv_result['fmv_vs_demand']:.1f}% vs OOTP" if calc_demand > 0 else None)
-                
-                if calc_demand > 0:
-                    if fmv_result['fmv'] < calc_demand * 0.9:
-                        st.warning(f"⚠️ OOTP demand is {abs(fmv_result['fmv_vs_demand']):.1f}% too high!")
-                    elif fmv_result['fmv'] > calc_demand * 1.1:
-                        st.success(f"✅ OOTP demand is {abs(fmv_result['fmv_vs_demand']):.1f}% below FMV - good value!")
-                    else:
-                        st.info("✅ OOTP demand is within 10% of FMV - reasonable")
-                
-                st.caption(f"**Recommended God Mode Signing:** ${fmv_result['fmv']/1e6:.1f}M - ${fmv_result['fmv']*1.05/1e6:.1f}M")
-        
-        # ========== SECTION 4: DESPERATION DECAY TRACKER ==========
-        st.subheader("⏰ Desperation Decay Tracker")
-        
-        # Filter options
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            decay_filter = st.selectbox(
-                "Filter by Status",
-                options=['All Players', 'Decay Applied', 'No Decay Yet', 'High Demand Only'],
-                index=0
-            )
-        with col2:
             position_filter = st.multiselect(
-                "Filter by Position",
-                options=sorted(decay_df['position'].unique()),
-                default=[]
+                "Position",
+                options=['All'] + sorted(fmv_df['position'].unique().tolist()),
+                default=['All']
             )
+        
+        with col2:
+            min_overall = st.slider("Min Overall", 0.5, 5.0, 0.5, 0.5, key="fmv_min_overall")
+        
         with col3:
-            min_overall = st.slider("Minimum Overall", 0.5, 5.0, 3.0, 0.5)
+            max_overall = st.slider("Max Overall", 0.5, 5.0, 5.0, 0.5, key="fmv_max_overall")
+        
+        with col4:
+            min_age = st.slider("Min Age", 18, 45, 18, key="fmv_min_age")
+        
+        with col5:
+            max_age = st.slider("Max Age", 18, 45, 45, key="fmv_max_age")
         
         # Apply filters
-        decay_display = decay_df.copy()
+        filtered_fmv = fmv_df.copy()
+        if 'All' not in position_filter and len(position_filter) > 0:
+            filtered_fmv = filtered_fmv[filtered_fmv['position'].isin(position_filter)]
+        filtered_fmv = filtered_fmv[
+            (filtered_fmv['overall'] >= min_overall) &
+            (filtered_fmv['overall'] <= max_overall) &
+            (filtered_fmv['age'] >= min_age) &
+            (filtered_fmv['age'] <= max_age)
+        ]
         
-        if decay_filter == 'Decay Applied':
-            decay_display = decay_display[decay_display['decay_applied'] == True]
-        elif decay_filter == 'No Decay Yet':
-            decay_display = decay_display[decay_display['decay_applied'] == False]
-        elif decay_filter == 'High Demand Only':
-            decay_display = decay_display[decay_display['original_demand'] > 10_000_000]
+        # Display table with color coding
+        display_df = filtered_fmv.copy()
         
-        if position_filter:
-            decay_display = decay_display[decay_display['position'].isin(position_filter)]
+        # Add color coding column
+        def get_status_color(row):
+            if row['comparable_count'] == 0:
+                return "⚪ No comparables"
+            diff_pct = row['difference_pct']
+            if abs(diff_pct) <= 10:
+                return "🟢 Fair ask"
+            elif diff_pct > 25:
+                return "🔴 >25% high"
+            elif diff_pct > 10:
+                return "🟡 10-25% high"
+            else:
+                return "🔵 Discount ask"
         
-        decay_display = decay_display[decay_display['overall'] >= min_overall]
+        display_df['Status'] = display_df.apply(get_status_color, axis=1)
         
-        # Prepare display dataframe
-        decay_table = decay_display[[
-            'name', 'position', 'overall', 'original_demand', 'days_past_deadline',
-            'decay_percentage', 'adjusted_demand', 'fmv', 'reason'
-        ]].copy()
-        
-        # Add recommended action
-        decay_table['action'] = decay_table.apply(
-            lambda row: DesperationDecayCalculator.get_recommended_action(
-                {'adjusted_demand': row['adjusted_demand'], 
-                 'decay_applied': row['days_past_deadline'] > 0 and row['decay_percentage'] > 0,
-                 'decay_percentage': row['decay_percentage']},
-                row['fmv']
-            ),
+        # Format currency columns
+        display_df['Demand'] = display_df['demand'].apply(lambda x: f"${x/1e6:.2f}M")
+        display_df['Comparable FMV'] = display_df['comparable_median'].apply(
+            lambda x: f"${x/1e6:.2f}M" if x > 0 else "N/A"
+        )
+        display_df['Difference'] = display_df.apply(
+            lambda row: f"${row['difference_amount']/1e6:.2f}M ({row['difference_pct']:+.0f}%)" 
+            if row['comparable_median'] > 0 else "N/A",
             axis=1
         )
         
-        # Format display
-        decay_table['original_demand'] = decay_table['original_demand'].apply(lambda x: f"${x/1e6:.1f}M")
-        decay_table['adjusted_demand'] = decay_table['adjusted_demand'].apply(lambda x: f"${x/1e6:.1f}M")
-        decay_table['fmv'] = decay_table['fmv'].apply(lambda x: f"${x/1e6:.1f}M")
-        decay_table['decay_percentage'] = decay_table['decay_percentage'].apply(lambda x: f"{x:.1f}%")
-        
-        # Rename columns
-        decay_table = decay_table.rename(columns={
+        # Select and rename columns for display
+        table_cols = {
             'name': 'Player',
             'position': 'Pos',
             'overall': 'OVR',
-            'original_demand': 'Original Demand',
-            'days_past_deadline': 'Days Past',
-            'decay_percentage': 'Decay %',
-            'adjusted_demand': 'Adjusted Demand',
-            'fmv': 'FMV',
-            'reason': 'Reason',
-            'action': 'Recommended Action'
-        })
+            'age': 'Age',
+            'Demand': 'FA Demand',
+            'Comparable FMV': 'Comparable FMV',
+            'Difference': 'Difference',
+            'comparable_count': '# Comps',
+            'Status': 'Status',
+            'recommendation': 'Recommendation'
+        }
         
-        # Sort by overall descending
-        decay_table = decay_table.sort_values('OVR', ascending=False)
+        display_table = display_df.rename(columns=table_cols)[list(table_cols.values())]
+        
+        # Sort options
+        sort_by = st.selectbox(
+            "Sort by",
+            options=['OVR', 'Age', 'FA Demand', '# Comps', 'Player'],
+            index=0
+        )
+        
+        if sort_by in display_table.columns:
+            if sort_by in ['OVR', 'Age', '# Comps']:
+                display_table = display_table.sort_values(sort_by, ascending=False)
+            else:
+                display_table = display_table.sort_values(sort_by)
         
         st.dataframe(
-            decay_table,
+            display_table,
             use_container_width=True,
             height=400
         )
         
-        st.caption(f"Showing {len(decay_table)} players | Date: {current_date.strftime('%B %d, %Y')}")
+        st.caption(f"Showing {len(display_table)} players | 🟢 Fair (±10%) | 🟡 High (10-25%) | 🔴 Very High (>25%) | 🔵 Below Market | ⚪ No Data")
         
-        # ========== SECTION 5: EXPORT FOR GOD MODE ==========
+        # ========== SECTION 2: INDIVIDUAL PLAYER DEEP DIVE ==========
+        st.markdown("---")
+        st.subheader("🔍 Individual Player Analysis")
+        
+        # Player selection
+        selected_fa = st.selectbox(
+            "Select a Free Agent",
+            options=sorted(fmv_df['name'].unique()),
+            index=0
+        )
+        
+        if selected_fa:
+            # Get detailed analysis
+            analysis = analyzer.get_fa_detailed_analysis(selected_fa, max_comparables=20)
+            
+            if 'error' not in analysis:
+                fa_details = analysis['fa_details']
+                stats = analysis['stats']
+                recommendation = analysis['recommendation']
+                comparables = analysis['comparables']
+                
+                # Player details
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Position", fa_details['position'])
+                    st.metric("Overall", f"{fa_details['overall']:.1f}★")
+                
+                with col2:
+                    st.metric("Age", fa_details['age'])
+                    st.metric("FA Demand", f"${fa_details['demand']/1e6:.2f}M")
+                
+                with col3:
+                    if stats['count'] > 0:
+                        st.metric("Comparables Found", stats['count'])
+                        st.metric("FMV (Median)", f"${stats['median']/1e6:.2f}M")
+                
+                # Comparables table
+                if len(comparables) > 0:
+                    st.markdown("**Comparable Players:**")
+                    
+                    comp_display = comparables.copy()
+                    comp_display['Salary'] = comp_display['salary'].apply(lambda x: f"${x/1e6:.2f}M")
+                    comp_display['Overall'] = comp_display['overall'].apply(lambda x: f"{x:.1f}★")
+                    comp_display['Similarity'] = comp_display['similarity_score'].apply(lambda x: f"{x:.0f}")
+                    
+                    comp_cols = ['name', 'Overall', 'age', 'Salary', 'Similarity']
+                    if 'team' in comp_display.columns:
+                        comp_cols.insert(4, 'team')
+                    if 'total_years' in comp_display.columns:
+                        comp_display['Years'] = comp_display['total_years']
+                        comp_cols.insert(5, 'Years')
+                    
+                    comp_table = comp_display[comp_cols].rename(columns={
+                        'name': 'Player',
+                        'age': 'Age',
+                        'team': 'Team'
+                    })
+                    
+                    st.dataframe(comp_table, use_container_width=True, height=300)
+                    
+                    # Charts
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Salary distribution histogram
+                        fig = go.Figure()
+                        
+                        fig.add_trace(go.Histogram(
+                            x=comparables['salary'],
+                            nbinsx=10,
+                            name='Comparables',
+                            marker_color='lightblue'
+                        ))
+                        
+                        # Add FA demand line
+                        fig.add_vline(
+                            x=fa_details['demand'],
+                            line_dash="dash",
+                            line_color="red",
+                            annotation_text=f"FA Demand: ${fa_details['demand']/1e6:.1f}M",
+                            annotation_position="top"
+                        )
+                        
+                        # Add median line
+                        fig.add_vline(
+                            x=stats['median'],
+                            line_dash="dash",
+                            line_color="green",
+                            annotation_text=f"Median: ${stats['median']/1e6:.1f}M",
+                            annotation_position="bottom"
+                        )
+                        
+                        fig.update_layout(
+                            title="Salary Distribution of Comparables",
+                            xaxis_title="Salary",
+                            yaxis_title="Count",
+                            showlegend=False,
+                            height=350
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        # Percentile indicator
+                        st.markdown("**Market Position:**")
+                        
+                        percentile = recommendation['demand_percentile']
+                        st.progress(percentile / 100)
+                        st.caption(f"FA demand is at the {percentile:.0f}th percentile")
+                        
+                        if percentile > 75:
+                            st.warning(f"⚠️ Asking price is in top 25% of comparables")
+                        elif percentile < 25:
+                            st.info(f"💡 Asking price is in bottom 25% of comparables")
+                        else:
+                            st.success(f"✅ Asking price is in middle 50% of comparables")
+                        
+                        # Recommended signing range
+                        st.markdown("**Recommended Signing Range:**")
+                        st.markdown(f"**25th-75th Percentile:** ${stats['p25']/1e6:.2f}M - ${stats['p75']/1e6:.2f}M")
+                        st.markdown(f"**Fair Market Value:** ${stats['median']/1e6:.2f}M")
+                        
+                        if recommendation['difference_pct'] > 25:
+                            st.error(f"❌ FA asking {recommendation['difference_pct']:.0f}% above market")
+                        elif recommendation['difference_pct'] > 10:
+                            st.warning(f"⚠️ FA asking {recommendation['difference_pct']:.0f}% above market")
+                        elif abs(recommendation['difference_pct']) <= 10:
+                            st.success(f"✅ FA asking within 10% of market")
+                        else:
+                            st.info(f"💰 FA asking {abs(recommendation['difference_pct']):.0f}% below market - good value!")
+                    
+                    # Summary box
+                    st.info(f"""
+                    **Summary for {selected_fa}:**
+                    - Comparables Found: {stats['count']} signed players
+                    - Overall Range: {stats['overall_range']}
+                    - Age Range: {stats['age_range']}
+                    - Salary Range: ${stats['min']/1e6:.2f}M - ${stats['max']/1e6:.2f}M
+                    - Median Salary: ${stats['median']/1e6:.2f}M
+                    - 25th-75th Percentile: ${stats['p25']/1e6:.2f}M - ${stats['p75']/1e6:.2f}M
+                    
+                    **Recommendation:** Sign between ${stats['p25']/1e6:.1f}M and ${stats['p75']/1e6:.1f}M
+                    """)
+                else:
+                    st.warning(f"⚠️ No comparable players found for {selected_fa}. Try a broader search or use manual evaluation.")
+        
+        # ========== SECTION 3: EXPORT FOR GOD MODE ==========
+        st.markdown("---")
         st.subheader("📥 Export for God Mode")
         
         col1, col2 = st.columns(2)
         
         with col1:
             st.markdown("**Export Options:**")
-            export_threshold = st.slider(
+            export_min_overall = st.slider(
                 "Minimum Overall for Export",
-                0.5, 5.0, 3.5, 0.5,
-                help="Only export players above this overall rating"
+                0.5, 5.0, 3.0, 0.5,
+                help="Only export players above this overall rating",
+                key="export_min_overall"
             )
             
-            include_fmv = st.checkbox("Include FMV Analysis", value=True)
-            include_decay = st.checkbox("Include Decay Analysis", value=True)
+            export_positions = st.multiselect(
+                "Positions to Include",
+                options=sorted(fmv_df['position'].unique()),
+                default=sorted(fmv_df['position'].unique()),
+                help="Select which positions to include in export"
+            )
         
         with col2:
             st.markdown("**Generate Export:**")
             
-            if st.button("📥 Generate FMV Report CSV", type="primary"):
+            if st.button("📥 Generate CSV Export", type="primary"):
                 # Prepare export data
-                export_df = decay_df[decay_df['overall'] >= export_threshold].copy()
+                export_df = fmv_df[
+                    (fmv_df['overall'] >= export_min_overall) &
+                    (fmv_df['position'].isin(export_positions))
+                ].copy()
                 
-                export_cols = ['name', 'position', 'overall', 'war', 'original_demand']
-                
-                if include_fmv:
-                    export_cols.extend(['fmv', 'position_weight', 'tier'])
-                
-                if include_decay:
-                    export_cols.extend(['adjusted_demand', 'decay_percentage', 'days_past_deadline'])
-                
-                export_cols.append('reason')
-                
-                # Add recommended action
-                export_df['recommended_action'] = export_df.apply(
-                    lambda row: DesperationDecayCalculator.get_recommended_action(
-                        {'adjusted_demand': row['adjusted_demand'], 
-                         'decay_applied': row['days_past_deadline'] > 0 and row['decay_percentage'] > 0,
-                         'decay_percentage': row['decay_percentage']},
-                        row['fmv']
-                    ),
+                # Calculate discount %
+                export_df['discount_pct'] = export_df.apply(
+                    lambda row: ((row['demand'] - row['comparable_median']) / row['demand'] * 100)
+                    if row['comparable_median'] > 0 and row['demand'] > 0 else 0,
                     axis=1
                 )
-                export_cols.append('recommended_action')
+                
+                # Select columns for export
+                export_cols = [
+                    'name', 'position', 'overall', 'age', 
+                    'demand', 'comparable_median', 'comparable_p25', 'comparable_p75',
+                    'discount_pct', 'comparable_count', 'recommendation'
+                ]
                 
                 export_final = export_df[export_cols].copy()
                 
@@ -1855,16 +1895,14 @@ try:
                     'name': 'Player Name',
                     'position': 'Position',
                     'overall': 'Overall',
-                    'war': 'Projected WAR',
-                    'original_demand': 'Original Demand',
-                    'fmv': 'Fair Market Value',
-                    'position_weight': 'Position Weight',
-                    'tier': 'Tier',
-                    'adjusted_demand': 'Adjusted Demand (with Decay)',
-                    'decay_percentage': 'Decay %',
-                    'days_past_deadline': 'Days Past Jan 15',
-                    'reason': 'Decay Reason',
-                    'recommended_action': 'Recommended Action'
+                    'age': 'Age',
+                    'demand': 'FA Demand',
+                    'comparable_median': 'Recommended FMV',
+                    'comparable_p25': 'FMV Low Range',
+                    'comparable_p75': 'FMV High Range',
+                    'discount_pct': 'Discount %',
+                    'comparable_count': 'Comparable Count',
+                    'recommendation': 'Recommendation'
                 })
                 
                 # Sort by overall descending
@@ -1872,39 +1910,18 @@ try:
                 
                 csv = export_final.to_csv(index=False)
                 st.download_button(
-                    "📥 Download FMV Report",
+                    "📥 Download God Mode Pricing CSV",
                     csv,
-                    f"fmv_report_{current_date.strftime('%Y%m%d')}.csv",
+                    f"fa_pricing_guide_{datetime.date.today().strftime('%Y%m%d')}.csv",
                     "text/csv",
-                    help=f"Export {len(export_final)} players with FMV analysis"
+                    help=f"Export {len(export_final)} players with FMV recommendations"
                 )
                 
-                st.success(f"✅ Generated report for {len(export_final)} players!")
-        
-        # Summary statistics
-        st.markdown("---")
-        st.subheader("📈 Market Summary Statistics")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        col1.metric(
-            "Players with Decay",
-            f"{len(decay_df[decay_df['decay_applied'] == True])}"
-        )
-        col2.metric(
-            "Avg Decay %",
-            f"{decay_df[decay_df['decay_applied'] == True]['decay_percentage'].mean():.1f}%" 
-            if len(decay_df[decay_df['decay_applied'] == True]) > 0 else "0.0%"
-        )
-        col3.metric(
-            "Players Above FMV",
-            f"{len(decay_df[decay_df['adjusted_demand'] > decay_df['fmv']])}"
-        )
-        col4.metric(
-            "Avg FMV vs Demand",
-            f"{((decay_df['fmv'].mean() / decay_df['original_demand'].mean() - 1) * 100):.1f}%"
-            if decay_df['original_demand'].mean() > 0 else "N/A"
-        )
+                st.success(f"✅ Generated export for {len(export_final)} players!")
+                
+                # Show preview
+                st.markdown("**Preview of Export:**")
+                st.dataframe(export_final.head(10), use_container_width=True)
     
     # Footer
     st.markdown("---")
