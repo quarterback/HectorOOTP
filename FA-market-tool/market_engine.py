@@ -452,10 +452,14 @@ class MarketAnalyzer:
             (self.all_players['overall'] <= overall_max)
         ].sort_values('salary', ascending=False).head(limit)
         
-        # Include team_full_name if available, otherwise fall back to team
+        # Include enriched team columns if available
         base_cols = ['name', 'position', 'overall', 'potential', 'age', 'salary', 'source', 'team']
-        if 'team_full_name' in comps.columns:
-            base_cols.append('team_full_name')
+        enriched_team_cols = ['team_full_name', 'team_abbr', 'team_mode', 'team_win_pct', 
+                              'team_budget', 'team_payroll']
+        
+        for col in enriched_team_cols:
+            if col in comps.columns:
+                base_cols.append(col)
         
         return comps[base_cols]
     
